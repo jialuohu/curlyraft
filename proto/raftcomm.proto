@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+import "appendentries.proto";
+import "requestvote.proto";
+
+package raftcomm;
+
+option go_package="internal/proto;raftcomm";
+
+service RaftCommunication {
+  /// AppendEntries RPC is invoked by the leader to replicate log entries (§5.3)
+  /// and also serves as a heartbeat (§5.2) when no entries are sent.
+  ///
+  /// Arguments:
+  ///   term          – leader’s current term.
+  ///   leaderId      – so follower can redirect clients.
+  ///   prevLogIndex  – index of log entry immediately preceding new ones.
+  ///   prevLogTerm   – term of prevLogIndex entry.
+  ///   entries[]     – log entries to store (empty for heartbeat; may send more than one for efficiency).
+  ///   leaderCommit  – leader’s commitIndex.
+  ///
+  /// Results:
+  ///   term    – currentTerm, for leader to update itself.
+  ///   success – true if follower contained entry matching prevLogIndex and prevLogTerm.
+  rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
+
+  /// RequestVote RPC is invoked by candidates to gather votes (§5.2).
+  ///
+  /// Arguments:
+  ///   term          – candidate’s current term.
+  ///   candidateId   – ID of the candidate requesting vote.
+  ///   lastLogIndex  – index of candidate’s last log entry (§5.4).
+  ///   lastLogTerm   – term of candidate’s last log entry (§5.4).
+  ///
+  /// Results:
+  ///   term          – currentTerm, for candidate to update itself if it’s stale.
+  ///   voteGranted   – true means follower received and granted vote to the candidate.
+  rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
+}
+

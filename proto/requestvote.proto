@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package raftcomm;
+
+option go_package="internal/proto;raftcomm";
+
+message RequestVoteRequest{
+  // Candidate’s current term.
+  int32 Term = 1;
+
+  // Candidate’s ID requesting vote.
+  int32 CandidateId = 2;
+
+  // Index of candidate’s last log entry.
+  int32 LastLogIndex = 3;
+
+  // Term of candidate’s last log entry.
+  int32 LastLogTerm = 4;
+}
+
+message RequestVoteResponse{
+  // Follower’s current term (so candidate can update itself if needed).
+  int32 Term = 1;
+
+  // True means follower received and granted its vote to the candidate.
+  bool VoteGranted = 2;
+}
