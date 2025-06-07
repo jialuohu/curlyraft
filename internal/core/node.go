@@ -7,39 +7,40 @@ import (
 	"log"
 )
 
-type Node struct {
+type nodeInfo struct {
+	id      string
+	netAddr string
+}
+
+type node struct {
 	// node info
-	State       Role
-	CommitIndex uint32
-	LastApplied uint32
-	Cfg         *NodeCfg
-	Sm          *curlyraft.StateMachine
+	state       Role
+	commitIndex uint32
+	lastApplied uint32
+	sm          *curlyraft.StateMachine
 
 	// persistence
-	LastLogIndex uint64
+	lastLogIndex uint64
 	storage      *persistence.Storage
 
 	// leader only
-	NextIndex  []uint32
-	MatchIndex []uint32
+	nextIndex  []uint32
+	matchIndex []uint32
 }
 
-func NewNode(cfg *NodeCfg, sm *curlyraft.StateMachine) *Node {
-	go NewRpcServer(cfg.Addr)
-	return &Node{
-		State:        Follower,
-		CommitIndex:  0,
-		LastApplied:  0,
-		Cfg:          cfg,
-		Sm:           sm,
-		LastLogIndex: 0,
+func newNode() *node {
+	return &node{
+		state:        Follower,
+		commitIndex:  0,
+		lastApplied:  0,
+		lastLogIndex: 0,
 		storage:      persistence.NewStorage(),
-		NextIndex:    nil,
-		MatchIndex:   nil,
+		nextIndex:    nil,
+		matchIndex:   nil,
 	}
 }
 
-func (n *Node) GetCurrentTerm() (uint32, error) {
+func (n *node) getCurrentTerm() (uint32, error) {
 	raw, closer, err := n.storage.Get([]byte("CurrentTerm"))
 	if err != nil {
 		log.Printf("[GetCurrentTerm] Failed to get value from storage: %v\n", err)
@@ -61,7 +62,7 @@ func (n *Node) GetCurrentTerm() (uint32, error) {
 	return curTerm, nil
 }
 
-func (n *Node) GetVotedFor() (uint32, error) {
+func (n *node) getVotedFor() (uint32, error) {
 	raw, closer, err := n.storage.Get([]byte("VotedFor"))
 	if err != nil {
 		log.Printf("[GetVotedFor] Failed to get value from storage: %v\n", err)
@@ -83,7 +84,7 @@ func (n *Node) GetVotedFor() (uint32, error) {
 	return votedFor, nil
 }
 
-func (n *Node) GetLog() ([]*LogEntry, error) {
+func (n *node) getLog() ([]*logEntry, error) {
 	lb := []byte(LogPrefix)
 	ub := append(lb, 0xFF)
 	iter, err := n.storage.NewIter(
@@ -101,7 +102,7 @@ func (n *Node) GetLog() ([]*LogEntry, error) {
 		}
 	}()
 
-	out := make([]*LogEntry, 0)
+	out := make([]*logEntry, 0)
 	for ok := iter.First(); ok; ok = iter.Next() {
 		raw, err := iter.ValueAndErr()
 		if err != nil {
@@ -109,7 +110,7 @@ func (n *Node) GetLog() ([]*LogEntry, error) {
 			return nil, err
 		}
 
-		entry, err := BytesToLogEntry(raw)
+		entry, err := bytesToLogEntry(raw)
 		if err != nil {
 			log.Printf("[GetLog] Failed to parse raw log entry: %v\n", err)
 			return nil, err
@@ -120,13 +121,13 @@ func (n *Node) GetLog() ([]*LogEntry, error) {
 	return out, nil
 }
 
-func (n *Node) AppendEntry(entry *LogEntry) error {
-	logIndex := n.LastLogIndex + 1
-	key, val := LogEntryToKeyBytes(entry, n.LastLogIndex)
+func (n *node) appendEntry(entry *logEntry) error {
+	logIndex := n.lastLogIndex + 1
+	key, val := logEntryToKeyBytes(entry, n.lastLogIndex)
 	if err := n.storage.Set(key, val); err != nil {
 		log.Printf("[AppendEntry] Failed to store entry into database: %v\n", err)
 		return err
 	}
-	n.LastLogIndex = logIndex
+	n.lastLogIndex = logIndex
 	return nil
 }
