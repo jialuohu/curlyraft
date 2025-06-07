@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package raftcomm;
+
+option go_package = "internal/proto;raftcomm";
+
+message InstallSnapshotRequest {
+  // Leader’s current term.
+  int32 Term = 1;
+
+  // Leader’s ID so follower can redirect clients.
+  int32 LeaderId = 2;
+
+  // Snapshot replaces all log entries up through and including this index.
+  int32 LastIncludedIndex = 3;
+
+  // Term of the last included log entry.
+  int32 LastIncludedTerm = 4;
+
+  // Byte offset where this chunk is positioned in the snapshot file.
+  int32 Offset = 5;
+
+  // Raw bytes of the snapshot chunk, starting at the given offset.
+  bytes Data = 6;
+
+  // True if this is the final chunk of the snapshot.
+  bool Done = 7;
+}
+
+message InstallSnapshotResponse {
+  // Follower’s current term, for leader to update itself if it’s behind.
+  int32 Term = 1;
+}

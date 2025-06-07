@@ -38,5 +38,7 @@ message AppendEntriesResponse {
 }
 
 message LogEntry {
-  int32 test = 1;
+  bytes Command = 1;
+  int32 LogTerm = 2;
+  int32 LogIndex = 3;
 }

@@ -24,24 +24,29 @@ var File_raftcomm_proto protoreflect.FileDescriptor
 
 const file_raftcomm_proto_rawDesc = "" +
 	"\n" +
-	"\x0eraftcomm.proto\x12\braftcomm\x1a\x13appendentries.proto\x1a\x11requestvote.proto2\xb1\x01\n" +
+	"\x0eraftcomm.proto\x12\braftcomm\x1a\x13appendentries.proto\x1a\x11requestvote.proto\x1a\x15installsnapshot.proto2\x89\x02\n" +
 	"\x11RaftCommunication\x12P\n" +
 	"\rAppendEntries\x12\x1e.raftcomm.AppendEntriesRequest\x1a\x1f.raftcomm.AppendEntriesResponse\x12J\n" +
-	"\vRequestVote\x12\x1c.raftcomm.RequestVoteRequest\x1a\x1d.raftcomm.RequestVoteResponseB\x19Z\x17internal/proto;raftcommb\x06proto3"
+	"\vRequestVote\x12\x1c.raftcomm.RequestVoteRequest\x1a\x1d.raftcomm.RequestVoteResponse\x12V\n" +
+	"\x0fInstallSnapShot\x12 .raftcomm.InstallSnapshotRequest\x1a!.raftcomm.InstallSnapshotResponseB\x19Z\x17internal/proto;raftcommb\x06proto3"
 
 var file_raftcomm_proto_goTypes = []any{
-	(*AppendEntriesRequest)(nil),  // 0: raftcomm.AppendEntriesRequest
-	(*RequestVoteRequest)(nil),    // 1: raftcomm.RequestVoteRequest
-	(*AppendEntriesResponse)(nil), // 2: raftcomm.AppendEntriesResponse
-	(*RequestVoteResponse)(nil),   // 3: raftcomm.RequestVoteResponse
+	(*AppendEntriesRequest)(nil),    // 0: raftcomm.AppendEntriesRequest
+	(*RequestVoteRequest)(nil),      // 1: raftcomm.RequestVoteRequest
+	(*InstallSnapshotRequest)(nil),  // 2: raftcomm.InstallSnapshotRequest
+	(*AppendEntriesResponse)(nil),   // 3: raftcomm.AppendEntriesResponse
+	(*RequestVoteResponse)(nil),     // 4: raftcomm.RequestVoteResponse
+	(*InstallSnapshotResponse)(nil), // 5: raftcomm.InstallSnapshotResponse
 }
 var file_raftcomm_proto_depIdxs = []int32{
 	0, // 0: raftcomm.RaftCommunication.AppendEntries:input_type -> raftcomm.AppendEntriesRequest
 	1, // 1: raftcomm.RaftCommunication.RequestVote:input_type -> raftcomm.RequestVoteRequest
-	2, // 2: raftcomm.RaftCommunication.AppendEntries:output_type -> raftcomm.AppendEntriesResponse
-	3, // 3: raftcomm.RaftCommunication.RequestVote:output_type -> raftcomm.RequestVoteResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	2, // 2: raftcomm.RaftCommunication.InstallSnapShot:input_type -> raftcomm.InstallSnapshotRequest
+	3, // 3: raftcomm.RaftCommunication.AppendEntries:output_type -> raftcomm.AppendEntriesResponse
+	4, // 4: raftcomm.RaftCommunication.RequestVote:output_type -> raftcomm.RequestVoteResponse
+	5, // 5: raftcomm.RaftCommunication.InstallSnapShot:output_type -> raftcomm.InstallSnapshotResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -54,6 +59,7 @@ func file_raftcomm_proto_init() {
 	}
 	file_appendentries_proto_init()
 	file_requestvote_proto_init()
+	file_installsnapshot_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

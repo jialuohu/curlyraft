@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "appendentries.proto";
 import "requestvote.proto";
+import "installsnapshot.proto";
 
 package raftcomm;
 
@@ -36,5 +37,21 @@ service RaftCommunication {
   ///   term          – currentTerm, for candidate to update itself if it’s stale.
   ///   voteGranted   – true means follower received and granted vote to the candidate.
   rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
+
+  /// InstallSnapshot RPC is invoked by the leader to send chunks of a snapshot to a follower.
+  /// Leaders always send chunks in order (§5.x).
+  ///
+  /// Arguments:
+  ///   term               – leader’s current term.
+  ///   leaderId           – leader’s ID so follower can redirect clients.
+  ///   lastIncludedIndex  – the snapshot replaces all entries up through and including this index.
+  ///   lastIncludedTerm   – term of the entry at lastIncludedIndex.
+  ///   offset             – byte offset where this chunk is positioned in the snapshot file.
+  ///   data               – raw bytes of the snapshot chunk, starting at offset.
+  ///   done               – true if this is the last chunk.
+  ///
+  /// Results:
+  ///   term               – currentTerm, for leader to update itself if its term is stale.
+  rpc InstallSnapShot(InstallSnapshotRequest) returns (InstallSnapshotResponse);
 }
 

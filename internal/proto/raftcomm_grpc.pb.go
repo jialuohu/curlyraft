@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RaftCommunication_AppendEntries_FullMethodName = "/raftcomm.RaftCommunication/AppendEntries"
-	RaftCommunication_RequestVote_FullMethodName   = "/raftcomm.RaftCommunication/RequestVote"
+	RaftCommunication_AppendEntries_FullMethodName   = "/raftcomm.RaftCommunication/AppendEntries"
+	RaftCommunication_RequestVote_FullMethodName     = "/raftcomm.RaftCommunication/RequestVote"
+	RaftCommunication_InstallSnapShot_FullMethodName = "/raftcomm.RaftCommunication/InstallSnapShot"
 )
 
 // RaftCommunicationClient is the client API for RaftCommunication service.
@@ -54,6 +55,21 @@ type RaftCommunicationClient interface {
 	// /   term          – currentTerm, for candidate to update itself if it’s stale.
 	// /   voteGranted   – true means follower received and granted vote to the candidate.
 	RequestVote(ctx context.Context, in *RequestVoteRequest, opts ...grpc.CallOption) (*RequestVoteResponse, error)
+	// / InstallSnapshot RPC is invoked by the leader to send chunks of a snapshot to a follower.
+	// / Leaders always send chunks in order (§5.x).
+	// /
+	// / Arguments:
+	// /   term               – leader’s current term.
+	// /   leaderId           – leader’s ID so follower can redirect clients.
+	// /   lastIncludedIndex  – the snapshot replaces all entries up through and including this index.
+	// /   lastIncludedTerm   – term of the entry at lastIncludedIndex.
+	// /   offset             – byte offset where this chunk is positioned in the snapshot file.
+	// /   data               – raw bytes of the snapshot chunk, starting at offset.
+	// /   done               – true if this is the last chunk.
+	// /
+	// / Results:
+	// /   term               – currentTerm, for leader to update itself if its term is stale.
+	InstallSnapShot(ctx context.Context, in *InstallSnapshotRequest, opts ...grpc.CallOption) (*InstallSnapshotResponse, error)
 }
 
 type raftCommunicationClient struct {
@@ -78,6 +94,16 @@ func (c *raftCommunicationClient) RequestVote(ctx context.Context, in *RequestVo
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RequestVoteResponse)
 	err := c.cc.Invoke(ctx, RaftCommunication_RequestVote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *raftCommunicationClient) InstallSnapShot(ctx context.Context, in *InstallSnapshotRequest, opts ...grpc.CallOption) (*InstallSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InstallSnapshotResponse)
+	err := c.cc.Invoke(ctx, RaftCommunication_InstallSnapShot_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +141,21 @@ type RaftCommunicationServer interface {
 	// /   term          – currentTerm, for candidate to update itself if it’s stale.
 	// /   voteGranted   – true means follower received and granted vote to the candidate.
 	RequestVote(context.Context, *RequestVoteRequest) (*RequestVoteResponse, error)
+	// / InstallSnapshot RPC is invoked by the leader to send chunks of a snapshot to a follower.
+	// / Leaders always send chunks in order (§5.x).
+	// /
+	// / Arguments:
+	// /   term               – leader’s current term.
+	// /   leaderId           – leader’s ID so follower can redirect clients.
+	// /   lastIncludedIndex  – the snapshot replaces all entries up through and including this index.
+	// /   lastIncludedTerm   – term of the entry at lastIncludedIndex.
+	// /   offset             – byte offset where this chunk is positioned in the snapshot file.
+	// /   data               – raw bytes of the snapshot chunk, starting at offset.
+	// /   done               – true if this is the last chunk.
+	// /
+	// / Results:
+	// /   term               – currentTerm, for leader to update itself if its term is stale.
+	InstallSnapShot(context.Context, *InstallSnapshotRequest) (*InstallSnapshotResponse, error)
 	mustEmbedUnimplementedRaftCommunicationServer()
 }
 
@@ -130,6 +171,9 @@ func (UnimplementedRaftCommunicationServer) AppendEntries(context.Context, *Appe
 }
 func (UnimplementedRaftCommunicationServer) RequestVote(context.Context, *RequestVoteRequest) (*RequestVoteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestVote not implemented")
+}
+func (UnimplementedRaftCommunicationServer) InstallSnapShot(context.Context, *InstallSnapshotRequest) (*InstallSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InstallSnapShot not implemented")
 }
 func (UnimplementedRaftCommunicationServer) mustEmbedUnimplementedRaftCommunicationServer() {}
 func (UnimplementedRaftCommunicationServer) testEmbeddedByValue()                           {}
@@ -188,6 +232,24 @@ func _RaftCommunication_RequestVote_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaftCommunication_InstallSnapShot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InstallSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftCommunicationServer).InstallSnapShot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RaftCommunication_InstallSnapShot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftCommunicationServer).InstallSnapShot(ctx, req.(*InstallSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaftCommunication_ServiceDesc is the grpc.ServiceDesc for RaftCommunication service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -202,6 +264,10 @@ var RaftCommunication_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RequestVote",
 			Handler:    _RaftCommunication_RequestVote_Handler,
+		},
+		{
+			MethodName: "InstallSnapShot",
+			Handler:    _RaftCommunication_InstallSnapShot_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

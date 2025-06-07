@@ -25,5 +25,5 @@ go.work.sum
 .env
 
 .idea
-demo/
+storage/
 .DS_Store

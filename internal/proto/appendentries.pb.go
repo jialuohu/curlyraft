@@ -172,7 +172,9 @@ func (x *AppendEntriesResponse) GetSuccess() bool {
 
 type LogEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Test          int32                  `protobuf:"varint,1,opt,name=test,proto3" json:"test,omitempty"`
+	Command       []byte                 `protobuf:"bytes,1,opt,name=Command,proto3" json:"Command,omitempty"`
+	LogTerm       int32                  `protobuf:"varint,2,opt,name=LogTerm,proto3" json:"LogTerm,omitempty"`
+	LogIndex      int32                  `protobuf:"varint,3,opt,name=LogIndex,proto3" json:"LogIndex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -207,9 +209,23 @@ func (*LogEntry) Descriptor() ([]byte, []int) {
 	return file_appendentries_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *LogEntry) GetTest() int32 {
+func (x *LogEntry) GetCommand() []byte {
 	if x != nil {
-		return x.Test
+		return x.Command
+	}
+	return nil
+}
+
+func (x *LogEntry) GetLogTerm() int32 {
+	if x != nil {
+		return x.LogTerm
+	}
+	return 0
+}
+
+func (x *LogEntry) GetLogIndex() int32 {
+	if x != nil {
+		return x.LogIndex
 	}
 	return 0
 }
@@ -228,9 +244,11 @@ const file_appendentries_proto_rawDesc = "" +
 	"\fLeaderCommit\x18\x06 \x01(\x05R\fLeaderCommit\"E\n" +
 	"\x15AppendEntriesResponse\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x05R\x04Term\x12\x18\n" +
-	"\aSuccess\x18\x02 \x01(\bR\aSuccess\"\x1e\n" +
-	"\bLogEntry\x12\x12\n" +
-	"\x04test\x18\x01 \x01(\x05R\x04testB\x19Z\x17internal/proto;raftcommb\x06proto3"
+	"\aSuccess\x18\x02 \x01(\bR\aSuccess\"Z\n" +
+	"\bLogEntry\x12\x18\n" +
+	"\aCommand\x18\x01 \x01(\fR\aCommand\x12\x18\n" +
+	"\aLogTerm\x18\x02 \x01(\x05R\aLogTerm\x12\x1a\n" +
+	"\bLogIndex\x18\x03 \x01(\x05R\bLogIndexB\x19Z\x17internal/proto;raftcommb\x06proto3"
 
 var (
 	file_appendentries_proto_rawDescOnce sync.Once
