@@ -8,7 +8,18 @@ import (
 type smDummy struct{}
 
 func (s smDummy) Apply(command []byte) (result []byte, err error) {
-	return nil, nil
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s smDummy) Snapshot() (snapshot []byte, err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s smDummy) Restore(snapshot []byte) (err error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func main() {
