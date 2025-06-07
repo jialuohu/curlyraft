@@ -24,13 +24,13 @@ const (
 type RequestVoteRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Candidate’s current term.
-	Term int32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
+	Term uint32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
 	// Candidate’s ID requesting vote.
-	CandidateId int32 `protobuf:"varint,2,opt,name=CandidateId,proto3" json:"CandidateId,omitempty"`
+	CandidateId string `protobuf:"bytes,2,opt,name=CandidateId,proto3" json:"CandidateId,omitempty"`
 	// Index of candidate’s last log entry.
-	LastLogIndex int32 `protobuf:"varint,3,opt,name=LastLogIndex,proto3" json:"LastLogIndex,omitempty"`
+	LastLogIndex uint32 `protobuf:"varint,3,opt,name=LastLogIndex,proto3" json:"LastLogIndex,omitempty"`
 	// Term of candidate’s last log entry.
-	LastLogTerm   int32 `protobuf:"varint,4,opt,name=LastLogTerm,proto3" json:"LastLogTerm,omitempty"`
+	LastLogTerm   uint32 `protobuf:"varint,4,opt,name=LastLogTerm,proto3" json:"LastLogTerm,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -65,28 +65,28 @@ func (*RequestVoteRequest) Descriptor() ([]byte, []int) {
 	return file_requestvote_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *RequestVoteRequest) GetTerm() int32 {
+func (x *RequestVoteRequest) GetTerm() uint32 {
 	if x != nil {
 		return x.Term
 	}
 	return 0
 }
 
-func (x *RequestVoteRequest) GetCandidateId() int32 {
+func (x *RequestVoteRequest) GetCandidateId() string {
 	if x != nil {
 		return x.CandidateId
 	}
-	return 0
+	return ""
 }
 
-func (x *RequestVoteRequest) GetLastLogIndex() int32 {
+func (x *RequestVoteRequest) GetLastLogIndex() uint32 {
 	if x != nil {
 		return x.LastLogIndex
 	}
 	return 0
 }
 
-func (x *RequestVoteRequest) GetLastLogTerm() int32 {
+func (x *RequestVoteRequest) GetLastLogTerm() uint32 {
 	if x != nil {
 		return x.LastLogTerm
 	}
@@ -96,7 +96,7 @@ func (x *RequestVoteRequest) GetLastLogTerm() int32 {
 type RequestVoteResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Follower’s current term (so candidate can update itself if needed).
-	Term int32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
+	Term uint32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
 	// True means follower received and granted its vote to the candidate.
 	VoteGranted   bool `protobuf:"varint,2,opt,name=VoteGranted,proto3" json:"VoteGranted,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -133,7 +133,7 @@ func (*RequestVoteResponse) Descriptor() ([]byte, []int) {
 	return file_requestvote_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *RequestVoteResponse) GetTerm() int32 {
+func (x *RequestVoteResponse) GetTerm() uint32 {
 	if x != nil {
 		return x.Term
 	}
@@ -153,12 +153,12 @@ const file_requestvote_proto_rawDesc = "" +
 	"\n" +
 	"\x11requestvote.proto\x12\braftcomm\"\x90\x01\n" +
 	"\x12RequestVoteRequest\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\x05R\x04Term\x12 \n" +
-	"\vCandidateId\x18\x02 \x01(\x05R\vCandidateId\x12\"\n" +
-	"\fLastLogIndex\x18\x03 \x01(\x05R\fLastLogIndex\x12 \n" +
-	"\vLastLogTerm\x18\x04 \x01(\x05R\vLastLogTerm\"K\n" +
+	"\x04Term\x18\x01 \x01(\rR\x04Term\x12 \n" +
+	"\vCandidateId\x18\x02 \x01(\tR\vCandidateId\x12\"\n" +
+	"\fLastLogIndex\x18\x03 \x01(\rR\fLastLogIndex\x12 \n" +
+	"\vLastLogTerm\x18\x04 \x01(\rR\vLastLogTerm\"K\n" +
 	"\x13RequestVoteResponse\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\x05R\x04Term\x12 \n" +
+	"\x04Term\x18\x01 \x01(\rR\x04Term\x12 \n" +
 	"\vVoteGranted\x18\x02 \x01(\bR\vVoteGrantedB\x19Z\x17internal/proto;raftcommb\x06proto3"
 
 var (

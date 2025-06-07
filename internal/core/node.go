@@ -1,10 +1,12 @@
 package core
 
 import (
-	"github.com/jialuohu/curlyraft"
+	"encoding/binary"
+	"fmt"
 	"github.com/jialuohu/curlyraft/internal/persistence"
-	"github.com/jialuohu/curlyraft/internal/util"
 	"log"
+	"sync"
+	"time"
 )
 
 type nodeInfo struct {
@@ -13,14 +15,20 @@ type nodeInfo struct {
 }
 
 type node struct {
+	mu sync.Mutex
+
 	// node info
 	state       Role
 	commitIndex uint32
 	lastApplied uint32
-	sm          *curlyraft.StateMachine
+	timer       *time.Timer
+	heartbeatCh chan struct{}
+	stopCh      chan struct{}
+	//sm          *curlyraft.StateMachine
 
 	// persistence
-	lastLogIndex uint64
+	lastLogIndex uint32
+	lastLogTerm  uint32
 	storage      *persistence.Storage
 
 	// leader only
@@ -29,22 +37,44 @@ type node struct {
 }
 
 func newNode() *node {
-	return &node{
+	n := &node{
+		mu:           sync.Mutex{},
 		state:        Follower,
 		commitIndex:  0,
 		lastApplied:  0,
+		timer:        nil,
+		heartbeatCh:  make(chan struct{}, 1),
+		stopCh:       make(chan struct{}),
 		lastLogIndex: 0,
+		lastLogTerm:  0,
 		storage:      persistence.NewStorage(),
 		nextIndex:    nil,
 		matchIndex:   nil,
 	}
+
+	if err := n.setCurrentTerm(InitialTerm); err != nil {
+		log.Fatalf("[newNode] Failed to initialize term value into storage: %v\n", err)
+	}
+	if err := n.setVotedFor(VotedForNoOne); err != nil {
+		log.Fatalf("[newNode] Failed to initialize votedFor value into storage: %v\n", err)
+	}
+
+	return n
 }
 
 func (n *node) getCurrentTerm() (uint32, error) {
+	bytesToUint32 := func(raw []byte) (uint32, error) {
+		if len(raw) < 4 {
+			return 0, fmt.Errorf("need at least 4 bytes, got %d", len(raw))
+		}
+		u := binary.BigEndian.Uint32(raw[:4])
+		return u, nil
+	}
+
 	raw, closer, err := n.storage.Get([]byte("CurrentTerm"))
 	if err != nil {
 		log.Printf("[GetCurrentTerm] Failed to get value from storage: %v\n", err)
-		return InvalidTerm, err
+		return InitialTerm, err
 	}
 	defer func() {
 		if err := closer.Close(); err != nil {
@@ -54,15 +84,25 @@ func (n *node) getCurrentTerm() (uint32, error) {
 
 	curTermBytes := make([]byte, len(raw))
 	copy(curTermBytes, raw)
-	curTerm, err := util.BytesToUint32(curTermBytes)
+	curTerm, err := bytesToUint32(curTermBytes)
 	if err != nil {
 		log.Printf("[GetCurrentTerm] Failed to convert bytes into int32: %v\n", err)
-		return InvalidTerm, err
+		return InitialTerm, err
 	}
 	return curTerm, nil
 }
 
-func (n *node) getVotedFor() (uint32, error) {
+func (n *node) setCurrentTerm(term uint32) error {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, term)
+	if err := n.storage.Set([]byte("CurrentTerm"), buf); err != nil {
+		log.Printf("[SetCurrentTerm] Failed to set term value into storage: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func (n *node) getVotedFor() (string, error) {
 	raw, closer, err := n.storage.Get([]byte("VotedFor"))
 	if err != nil {
 		log.Printf("[GetVotedFor] Failed to get value from storage: %v\n", err)
@@ -74,14 +114,15 @@ func (n *node) getVotedFor() (uint32, error) {
 		}
 	}()
 
-	votedForBytes := make([]byte, len(raw))
-	copy(votedForBytes, raw)
-	votedFor, err := util.BytesToUint32(votedForBytes)
-	if err != nil {
-		log.Printf("[GetVotedFor] Failed to convert bytes into int32: %v\n", err)
-		return VotedForNoOne, err
+	return string(raw), nil
+}
+
+func (n *node) setVotedFor(votedFor string) error {
+	if err := n.storage.Set([]byte("VotedFor"), []byte(votedFor)); err != nil {
+		log.Printf("[SetVotedFor] Failed to set votedFor value into storage: %v\n", err)
+		return err
 	}
-	return votedFor, nil
+	return nil
 }
 
 func (n *node) getLog() ([]*logEntry, error) {
@@ -129,5 +170,13 @@ func (n *node) appendEntry(entry *logEntry) error {
 		return err
 	}
 	n.lastLogIndex = logIndex
+	if n.lastLogTerm < entry.logTerm {
+		n.lastLogTerm = entry.logTerm
+	}
 	return nil
+}
+
+func (n *node) stopNode() {
+	close(n.heartbeatCh)
+	close(n.stopCh)
 }

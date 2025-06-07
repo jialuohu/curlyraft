@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 )
 
 type RaftCore struct {
@@ -20,7 +21,10 @@ type RaftCore struct {
 
 	node       *node
 	grpcServer *grpc.Server
-	listener   net.Listener
+
+	mu            sync.Mutex
+	receivedVotes uint16
+	quorumSize    uint16
 }
 
 func NewRaftCore(cfg config.NodeCfg, sm *curlyraft.StateMachine) *RaftCore {
@@ -37,16 +41,22 @@ func NewRaftCore(cfg config.NodeCfg, sm *curlyraft.StateMachine) *RaftCore {
 		return out
 	}
 
-	return &RaftCore{
+	rc := &RaftCore{
 		Info: nodeInfo{
 			id:      cfg.Id,
 			netAddr: cfg.NetAddr,
 		},
-		Peers:      peerStrParse(cfg.Peers),
-		StorageDir: cfg.StorageDir,
-		node:       newNode(),
-		Sm:         sm,
+		Peers:         peerStrParse(cfg.Peers),
+		StorageDir:    cfg.StorageDir,
+		node:          newNode(),
+		Sm:            sm,
+		receivedVotes: 0,
+		quorumSize:    0,
 	}
+
+	clusterSize := uint16(len(rc.Peers) + 1)
+	rc.quorumSize = (clusterSize / 2) + 1 // assumed clusterSize is odd
+	return rc
 }
 
 func (rc *RaftCore) Start() error {
@@ -56,7 +66,6 @@ func (rc *RaftCore) Start() error {
 		log.Printf("[RaftCore] Failed to listen on %s: %w", rc.Info.netAddr, err)
 		return err
 	}
-	rc.listener = lis
 
 	grpcServer := grpc.NewServer()
 	raftcomm.RegisterRaftCommunicationServer(grpcServer, rc)
@@ -70,7 +79,12 @@ func (rc *RaftCore) Start() error {
 	return nil
 }
 
+func (rc *RaftCore) Run() error {
+	return rc.roleLoop()
+}
+
 func (rc *RaftCore) Stop() {
+	rc.node.stopNode()
 	if rc.grpcServer != nil {
 		rc.grpcServer.GracefulStop()
 	}

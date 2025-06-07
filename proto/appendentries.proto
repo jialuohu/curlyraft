@@ -6,16 +6,16 @@ option go_package="internal/proto;raftcomm";
 
 message AppendEntriesRequest {
   // Leader’s term.
-  int32 Term = 1;
+  uint32 Term = 1;
 
   // Leader’s ID so follower can redirect clients if necessary.
-  int32 LeaderId = 2;
+  string LeaderId = 2;
 
   // Index of log entry immediately preceding new ones.
-  int32 PrevLogIndex = 3;
+  uint32 PrevLogIndex = 3;
 
   // Term of the entry at PrevLogIndex.
-  int32 PrevLogTerm = 4;
+  uint32 PrevLogTerm = 4;
 
   // Log entries to store on the follower.
   // - Empty for heartbeat
@@ -24,12 +24,12 @@ message AppendEntriesRequest {
 
   // Leader’s commitIndex: once follower’s log is updated, it can advance
   // its commit index up to this value.
-  int32 LeaderCommit = 6;
+  uint32 LeaderCommit = 6;
 }
 
 message AppendEntriesResponse {
   // Follower’s currentTerm (so leader can update itself if needed).
-  int32 Term = 1;
+  uint32 Term = 1;
 
   // True if follower’s log contained an entry at PrevLogIndex whose
   // term matched PrevLogTerm. In that case, the follower appends any new
@@ -39,6 +39,6 @@ message AppendEntriesResponse {
 
 message LogEntry {
   bytes Command = 1;
-  int32 LogTerm = 2;
-  int32 LogIndex = 3;
+  uint32 LogTerm = 2;
+  uint32 LogIndex = 3;
 }

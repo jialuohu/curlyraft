@@ -31,16 +31,23 @@ func main() {
 		"nodeB/localhost:21002,nodeC/localhost:21003",
 		"storage/21001",
 	)
+
 	log.Println("[main] Server starting...")
+
 	rc, err := api.NewServer(cfg, sm)
 	if err != nil {
-		log.Fatalf("[main] Error: %v\n", err)
+		log.Fatalf("[main] StartServer Error: %v\n", err)
 	}
-	log.Println("[main] Server started successfully!")
 
-	api.RunServer(rc)
+	log.Println("[main] Server running...")
+	if err := api.RunServer(rc); err != nil {
+		log.Fatalf("[main] RunServer Error: %v\n", err)
+	}
 
 	log.Println("[main] Server stopping...")
-	api.StopServer(rc)
+	if err := api.StopServer(rc); err != nil {
+		log.Fatalf("[main] StopServer Error: %v\n", err)
+	}
+
 	log.Println("[main] Server stopped successfully...")
 }

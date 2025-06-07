@@ -4,7 +4,6 @@ import (
 	"github.com/jialuohu/curlyraft"
 	"github.com/jialuohu/curlyraft/config"
 	"github.com/jialuohu/curlyraft/internal/core"
-	"time"
 )
 
 func NewServer(cfg config.NodeCfg, sm curlyraft.StateMachine) (*core.RaftCore, error) {
@@ -13,11 +12,11 @@ func NewServer(cfg config.NodeCfg, sm curlyraft.StateMachine) (*core.RaftCore, e
 	return rc, err
 }
 
-func RunServer(rc *core.RaftCore) {
-	//TODO implement me
-	time.Sleep(1 * time.Second)
+func RunServer(rc *core.RaftCore) error {
+	return rc.Run()
 }
 
-func StopServer(rc *core.RaftCore) {
+func StopServer(rc *core.RaftCore) error {
 	rc.Stop()
+	return nil
 }

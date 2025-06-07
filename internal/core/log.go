@@ -27,7 +27,7 @@ func bytesToLogEntry(raw []byte) (*logEntry, error) {
 	}, nil
 }
 
-func logEntryToKeyBytes(entry *logEntry, lastLogIndex uint64) ([]byte, []byte) {
+func logEntryToKeyBytes(entry *logEntry, lastLogIndex uint32) ([]byte, []byte) {
 	command := entry.command
 	buf := make([]byte, 8+len(command))
 	binary.BigEndian.PutUint32(buf[:4], entry.logTerm)
@@ -36,12 +36,12 @@ func logEntryToKeyBytes(entry *logEntry, lastLogIndex uint64) ([]byte, []byte) {
 
 	key := make([]byte, len(LogPrefix)+8)
 	copy(key, LogPrefix)
-	binary.BigEndian.AppendUint64(key, lastLogIndex)
+	binary.BigEndian.AppendUint32(key, lastLogIndex)
 	return key, buf
 }
 
 const (
-	InvalidTerm   = 0
-	VotedForNoOne = 0
+	InitialTerm   = 0
+	VotedForNoOne = "none"
 	LogPrefix     = "log/"
 )

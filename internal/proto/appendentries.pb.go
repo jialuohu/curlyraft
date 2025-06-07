@@ -24,20 +24,20 @@ const (
 type AppendEntriesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Leader’s term.
-	Term int32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
+	Term uint32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
 	// Leader’s ID so follower can redirect clients if necessary.
-	LeaderId int32 `protobuf:"varint,2,opt,name=LeaderId,proto3" json:"LeaderId,omitempty"`
+	LeaderId string `protobuf:"bytes,2,opt,name=LeaderId,proto3" json:"LeaderId,omitempty"`
 	// Index of log entry immediately preceding new ones.
-	PrevLogIndex int32 `protobuf:"varint,3,opt,name=PrevLogIndex,proto3" json:"PrevLogIndex,omitempty"`
+	PrevLogIndex uint32 `protobuf:"varint,3,opt,name=PrevLogIndex,proto3" json:"PrevLogIndex,omitempty"`
 	// Term of the entry at PrevLogIndex.
-	PrevLogTerm int32 `protobuf:"varint,4,opt,name=PrevLogTerm,proto3" json:"PrevLogTerm,omitempty"`
+	PrevLogTerm uint32 `protobuf:"varint,4,opt,name=PrevLogTerm,proto3" json:"PrevLogTerm,omitempty"`
 	// Log entries to store on the follower.
 	// - Empty for heartbeat
 	// - May contain multiple entries for efficiency.
 	Entries []*LogEntry `protobuf:"bytes,5,rep,name=Entries,proto3" json:"Entries,omitempty"`
 	// Leader’s commitIndex: once follower’s log is updated, it can advance
 	// its commit index up to this value.
-	LeaderCommit  int32 `protobuf:"varint,6,opt,name=LeaderCommit,proto3" json:"LeaderCommit,omitempty"`
+	LeaderCommit  uint32 `protobuf:"varint,6,opt,name=LeaderCommit,proto3" json:"LeaderCommit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -72,28 +72,28 @@ func (*AppendEntriesRequest) Descriptor() ([]byte, []int) {
 	return file_appendentries_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *AppendEntriesRequest) GetTerm() int32 {
+func (x *AppendEntriesRequest) GetTerm() uint32 {
 	if x != nil {
 		return x.Term
 	}
 	return 0
 }
 
-func (x *AppendEntriesRequest) GetLeaderId() int32 {
+func (x *AppendEntriesRequest) GetLeaderId() string {
 	if x != nil {
 		return x.LeaderId
 	}
-	return 0
+	return ""
 }
 
-func (x *AppendEntriesRequest) GetPrevLogIndex() int32 {
+func (x *AppendEntriesRequest) GetPrevLogIndex() uint32 {
 	if x != nil {
 		return x.PrevLogIndex
 	}
 	return 0
 }
 
-func (x *AppendEntriesRequest) GetPrevLogTerm() int32 {
+func (x *AppendEntriesRequest) GetPrevLogTerm() uint32 {
 	if x != nil {
 		return x.PrevLogTerm
 	}
@@ -107,7 +107,7 @@ func (x *AppendEntriesRequest) GetEntries() []*LogEntry {
 	return nil
 }
 
-func (x *AppendEntriesRequest) GetLeaderCommit() int32 {
+func (x *AppendEntriesRequest) GetLeaderCommit() uint32 {
 	if x != nil {
 		return x.LeaderCommit
 	}
@@ -117,7 +117,7 @@ func (x *AppendEntriesRequest) GetLeaderCommit() int32 {
 type AppendEntriesResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Follower’s currentTerm (so leader can update itself if needed).
-	Term int32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
+	Term uint32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
 	// True if follower’s log contained an entry at PrevLogIndex whose
 	// term matched PrevLogTerm. In that case, the follower appends any new
 	// entries and advances its commit index; otherwise, it rejects the append.
@@ -156,7 +156,7 @@ func (*AppendEntriesResponse) Descriptor() ([]byte, []int) {
 	return file_appendentries_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *AppendEntriesResponse) GetTerm() int32 {
+func (x *AppendEntriesResponse) GetTerm() uint32 {
 	if x != nil {
 		return x.Term
 	}
@@ -173,8 +173,8 @@ func (x *AppendEntriesResponse) GetSuccess() bool {
 type LogEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Command       []byte                 `protobuf:"bytes,1,opt,name=Command,proto3" json:"Command,omitempty"`
-	LogTerm       int32                  `protobuf:"varint,2,opt,name=LogTerm,proto3" json:"LogTerm,omitempty"`
-	LogIndex      int32                  `protobuf:"varint,3,opt,name=LogIndex,proto3" json:"LogIndex,omitempty"`
+	LogTerm       uint32                 `protobuf:"varint,2,opt,name=LogTerm,proto3" json:"LogTerm,omitempty"`
+	LogIndex      uint32                 `protobuf:"varint,3,opt,name=LogIndex,proto3" json:"LogIndex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -216,14 +216,14 @@ func (x *LogEntry) GetCommand() []byte {
 	return nil
 }
 
-func (x *LogEntry) GetLogTerm() int32 {
+func (x *LogEntry) GetLogTerm() uint32 {
 	if x != nil {
 		return x.LogTerm
 	}
 	return 0
 }
 
-func (x *LogEntry) GetLogIndex() int32 {
+func (x *LogEntry) GetLogIndex() uint32 {
 	if x != nil {
 		return x.LogIndex
 	}
@@ -236,19 +236,19 @@ const file_appendentries_proto_rawDesc = "" +
 	"\n" +
 	"\x13appendentries.proto\x12\braftcomm\"\xde\x01\n" +
 	"\x14AppendEntriesRequest\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\x05R\x04Term\x12\x1a\n" +
-	"\bLeaderId\x18\x02 \x01(\x05R\bLeaderId\x12\"\n" +
-	"\fPrevLogIndex\x18\x03 \x01(\x05R\fPrevLogIndex\x12 \n" +
-	"\vPrevLogTerm\x18\x04 \x01(\x05R\vPrevLogTerm\x12,\n" +
+	"\x04Term\x18\x01 \x01(\rR\x04Term\x12\x1a\n" +
+	"\bLeaderId\x18\x02 \x01(\tR\bLeaderId\x12\"\n" +
+	"\fPrevLogIndex\x18\x03 \x01(\rR\fPrevLogIndex\x12 \n" +
+	"\vPrevLogTerm\x18\x04 \x01(\rR\vPrevLogTerm\x12,\n" +
 	"\aEntries\x18\x05 \x03(\v2\x12.raftcomm.LogEntryR\aEntries\x12\"\n" +
-	"\fLeaderCommit\x18\x06 \x01(\x05R\fLeaderCommit\"E\n" +
+	"\fLeaderCommit\x18\x06 \x01(\rR\fLeaderCommit\"E\n" +
 	"\x15AppendEntriesResponse\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\x05R\x04Term\x12\x18\n" +
+	"\x04Term\x18\x01 \x01(\rR\x04Term\x12\x18\n" +
 	"\aSuccess\x18\x02 \x01(\bR\aSuccess\"Z\n" +
 	"\bLogEntry\x12\x18\n" +
 	"\aCommand\x18\x01 \x01(\fR\aCommand\x12\x18\n" +
-	"\aLogTerm\x18\x02 \x01(\x05R\aLogTerm\x12\x1a\n" +
-	"\bLogIndex\x18\x03 \x01(\x05R\bLogIndexB\x19Z\x17internal/proto;raftcommb\x06proto3"
+	"\aLogTerm\x18\x02 \x01(\rR\aLogTerm\x12\x1a\n" +
+	"\bLogIndex\x18\x03 \x01(\rR\bLogIndexB\x19Z\x17internal/proto;raftcommb\x06proto3"
 
 var (
 	file_appendentries_proto_rawDescOnce sync.Once

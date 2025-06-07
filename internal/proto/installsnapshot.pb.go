@@ -24,15 +24,15 @@ const (
 type InstallSnapshotRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Leader’s current term.
-	Term int32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
+	Term uint32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
 	// Leader’s ID so follower can redirect clients.
-	LeaderId int32 `protobuf:"varint,2,opt,name=LeaderId,proto3" json:"LeaderId,omitempty"`
+	LeaderId string `protobuf:"bytes,2,opt,name=LeaderId,proto3" json:"LeaderId,omitempty"`
 	// Snapshot replaces all log entries up through and including this index.
-	LastIncludedIndex int32 `protobuf:"varint,3,opt,name=LastIncludedIndex,proto3" json:"LastIncludedIndex,omitempty"`
+	LastIncludedIndex uint32 `protobuf:"varint,3,opt,name=LastIncludedIndex,proto3" json:"LastIncludedIndex,omitempty"`
 	// Term of the last included log entry.
-	LastIncludedTerm int32 `protobuf:"varint,4,opt,name=LastIncludedTerm,proto3" json:"LastIncludedTerm,omitempty"`
+	LastIncludedTerm uint32 `protobuf:"varint,4,opt,name=LastIncludedTerm,proto3" json:"LastIncludedTerm,omitempty"`
 	// Byte offset where this chunk is positioned in the snapshot file.
-	Offset int32 `protobuf:"varint,5,opt,name=Offset,proto3" json:"Offset,omitempty"`
+	Offset uint32 `protobuf:"varint,5,opt,name=Offset,proto3" json:"Offset,omitempty"`
 	// Raw bytes of the snapshot chunk, starting at the given offset.
 	Data []byte `protobuf:"bytes,6,opt,name=Data,proto3" json:"Data,omitempty"`
 	// True if this is the final chunk of the snapshot.
@@ -71,35 +71,35 @@ func (*InstallSnapshotRequest) Descriptor() ([]byte, []int) {
 	return file_installsnapshot_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *InstallSnapshotRequest) GetTerm() int32 {
+func (x *InstallSnapshotRequest) GetTerm() uint32 {
 	if x != nil {
 		return x.Term
 	}
 	return 0
 }
 
-func (x *InstallSnapshotRequest) GetLeaderId() int32 {
+func (x *InstallSnapshotRequest) GetLeaderId() string {
 	if x != nil {
 		return x.LeaderId
 	}
-	return 0
+	return ""
 }
 
-func (x *InstallSnapshotRequest) GetLastIncludedIndex() int32 {
+func (x *InstallSnapshotRequest) GetLastIncludedIndex() uint32 {
 	if x != nil {
 		return x.LastIncludedIndex
 	}
 	return 0
 }
 
-func (x *InstallSnapshotRequest) GetLastIncludedTerm() int32 {
+func (x *InstallSnapshotRequest) GetLastIncludedTerm() uint32 {
 	if x != nil {
 		return x.LastIncludedTerm
 	}
 	return 0
 }
 
-func (x *InstallSnapshotRequest) GetOffset() int32 {
+func (x *InstallSnapshotRequest) GetOffset() uint32 {
 	if x != nil {
 		return x.Offset
 	}
@@ -123,7 +123,7 @@ func (x *InstallSnapshotRequest) GetDone() bool {
 type InstallSnapshotResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Follower’s current term, for leader to update itself if it’s behind.
-	Term          int32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
+	Term          uint32 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -158,7 +158,7 @@ func (*InstallSnapshotResponse) Descriptor() ([]byte, []int) {
 	return file_installsnapshot_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *InstallSnapshotResponse) GetTerm() int32 {
+func (x *InstallSnapshotResponse) GetTerm() uint32 {
 	if x != nil {
 		return x.Term
 	}
@@ -171,15 +171,15 @@ const file_installsnapshot_proto_rawDesc = "" +
 	"\n" +
 	"\x15installsnapshot.proto\x12\braftcomm\"\xe2\x01\n" +
 	"\x16InstallSnapshotRequest\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\x05R\x04Term\x12\x1a\n" +
-	"\bLeaderId\x18\x02 \x01(\x05R\bLeaderId\x12,\n" +
-	"\x11LastIncludedIndex\x18\x03 \x01(\x05R\x11LastIncludedIndex\x12*\n" +
-	"\x10LastIncludedTerm\x18\x04 \x01(\x05R\x10LastIncludedTerm\x12\x16\n" +
-	"\x06Offset\x18\x05 \x01(\x05R\x06Offset\x12\x12\n" +
+	"\x04Term\x18\x01 \x01(\rR\x04Term\x12\x1a\n" +
+	"\bLeaderId\x18\x02 \x01(\tR\bLeaderId\x12,\n" +
+	"\x11LastIncludedIndex\x18\x03 \x01(\rR\x11LastIncludedIndex\x12*\n" +
+	"\x10LastIncludedTerm\x18\x04 \x01(\rR\x10LastIncludedTerm\x12\x16\n" +
+	"\x06Offset\x18\x05 \x01(\rR\x06Offset\x12\x12\n" +
 	"\x04Data\x18\x06 \x01(\fR\x04Data\x12\x12\n" +
 	"\x04Done\x18\a \x01(\bR\x04Done\"-\n" +
 	"\x17InstallSnapshotResponse\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\x05R\x04TermB\x19Z\x17internal/proto;raftcommb\x06proto3"
+	"\x04Term\x18\x01 \x01(\rR\x04TermB\x19Z\x17internal/proto;raftcommb\x06proto3"
 
 var (
 	file_installsnapshot_proto_rawDescOnce sync.Once
