@@ -36,7 +36,7 @@ type node struct {
 	matchIndex []uint32
 }
 
-func newNode() *node {
+func newNode(storageDir string) *node {
 	n := &node{
 		mu:           sync.Mutex{},
 		state:        Follower,
@@ -47,7 +47,7 @@ func newNode() *node {
 		stopCh:       make(chan struct{}),
 		lastLogIndex: 0,
 		lastLogTerm:  0,
-		storage:      persistence.NewStorage(),
+		storage:      persistence.NewStorage(storageDir),
 		nextIndex:    nil,
 		matchIndex:   nil,
 	}

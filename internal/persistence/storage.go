@@ -10,8 +10,8 @@ type Storage struct {
 	db *pebble.DB
 }
 
-func NewStorage() *Storage {
-	db, err := pebble.Open("storage", &pebble.Options{})
+func NewStorage(storageDir string) *Storage {
+	db, err := pebble.Open(storageDir, &pebble.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}

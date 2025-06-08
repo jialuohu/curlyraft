@@ -14,10 +14,9 @@ import (
 
 type RaftCore struct {
 	raftcomm.UnimplementedRaftCommunicationServer
-	Info       nodeInfo
-	Peers      []nodeInfo
-	StorageDir string
-	Sm         *curlyraft.StateMachine
+	Info  nodeInfo
+	Peers []nodeInfo
+	Sm    *curlyraft.StateMachine
 
 	node       *node
 	grpcServer *grpc.Server
@@ -47,8 +46,7 @@ func NewRaftCore(cfg config.NodeCfg, sm *curlyraft.StateMachine) *RaftCore {
 			netAddr: cfg.NetAddr,
 		},
 		Peers:         peerStrParse(cfg.Peers),
-		StorageDir:    cfg.StorageDir,
-		node:          newNode(),
+		node:          newNode(cfg.StorageDir),
 		Sm:            sm,
 		receivedVotes: 0,
 		quorumSize:    0,

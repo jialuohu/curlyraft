@@ -19,8 +19,57 @@ func (rc *RaftCore) AppendEntries(ctx context.Context, request *raftcomm.AppendE
 }
 
 func (rc *RaftCore) RequestVote(ctx context.Context, request *raftcomm.RequestVoteRequest) (*raftcomm.RequestVoteResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	rc.mu.Lock()
+
+	curTerm, err := rc.node.getCurrentTerm()
+	if err != nil {
+		log.Printf("[RPC Server] RequestVote: Error while getting current term: %v\n", err)
+		return nil, err
+	}
+	candTerm := request.GetTerm()
+	if curTerm > candTerm {
+		rc.mu.Unlock()
+		return &raftcomm.RequestVoteResponse{
+			Term:        curTerm,
+			VoteGranted: false,
+		}, nil
+	} else if curTerm < candTerm {
+		rc.node.state = Follower
+		if err := rc.node.setCurrentTerm(candTerm); err != nil {
+			log.Printf("[RPC Server] RequestVote: Error while setting new term: %v\n", err)
+			return nil, err
+		}
+	}
+
+	votedFor, err := rc.node.getVotedFor()
+	if err != nil {
+		log.Printf("[RPC Server] RequestVote: Error while getting votedFor: %v\n", err)
+		return nil, err
+	}
+	candId := request.GetCandidateId()
+	candLastLogIndex := request.GetLastLogIndex()
+	candLastLogTerm := request.GetLastLogTerm()
+	if votedFor != VotedForNoOne &&
+		votedFor != candId &&
+		rc.node.lastLogIndex <= candLastLogIndex &&
+		rc.node.lastLogTerm <= candLastLogTerm {
+
+		rc.mu.Unlock()
+		return &raftcomm.RequestVoteResponse{
+			Term:        curTerm,
+			VoteGranted: false,
+		}, nil
+	}
+
+	if err := rc.node.setVotedFor(candId); err != nil {
+		log.Printf("[RPC Server] RequestVote: Error while setting votedFor: %v\n", err)
+		return nil, err
+	}
+	rc.mu.Unlock()
+	return &raftcomm.RequestVoteResponse{
+		Term:        curTerm,
+		VoteGranted: true,
+	}, nil
 }
 
 func (rc *RaftCore) InstallSnapShot(ctx context.Context, request *raftcomm.InstallSnapshotRequest) (*raftcomm.InstallSnapshotResponse, error) {
