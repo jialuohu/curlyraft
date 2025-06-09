@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"log"
 	"math/rand"
 	"time"
@@ -30,7 +31,7 @@ func (rc *RaftCore) roleLoop() error {
 				return err
 			}
 		case <-rc.node.heartbeatCh:
-			//TODO implement me
+			continue
 		case <-rc.node.stopCh:
 			if rc.node.timer != nil {
 				rc.node.timer.Stop()
@@ -40,7 +41,6 @@ func (rc *RaftCore) roleLoop() error {
 	}
 }
 
-// TODO implement me
 func (n *node) tickHeartbeat() {
 	select {
 	case n.heartbeatCh <- struct{}{}:
@@ -79,13 +79,28 @@ func (rc *RaftCore) startElection() error {
 
 func (rc *RaftCore) becomeLeader(term uint32) {
 	// caller must hold rc.mu
-	log.Printf("[RaftCore] Node %s becomes Leader in term %d\n",
-		rc.Info.id, term)
+	log.Printf("[RaftCore] Node %s becomes Leader in term %d\n", rc.Info.id, term)
 
 	rc.node.state = Leader
 	size := len(rc.Peers) + 1
-	rc.node.nextIndex = make([]uint32, size)
-	rc.node.matchIndex = make([]uint32, size)
 
-	go rc.heartbeatLoop()
+	rc.node.nextIndex = make(map[string]uint32, size)
+	rc.node.matchIndex = make(map[string]uint32, size)
+	for _, p := range rc.Peers {
+		rc.node.nextIndex[p.id] = rc.node.lastLogIndex + 1
+		rc.node.matchIndex[p.id] = 0
+	}
+
+	ctx, cancel := context.WithCancel(rc.node.leaderCtx)
+	rc.node.leaderCancel = cancel
+
+	go rc.heartbeatLoop(ctx, term)
+	go rc.leaderStartServing(ctx)
+}
+
+func (rc *RaftCore) leaderStartServing(ctx context.Context) {
+	for {
+		log.Println("[leaderStartServing] Serving...")
+		time.Sleep(time.Second * 2)
+	}
 }

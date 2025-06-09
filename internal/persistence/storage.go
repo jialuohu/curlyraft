@@ -28,6 +28,10 @@ func (s *Storage) Set(key []byte, value []byte) error {
 	return s.db.Set(key, value, pebble.Sync)
 }
 
+func (s *Storage) Delete(key []byte) error {
+	return s.db.Delete(key, pebble.Sync)
+}
+
 type IterOptions = pebble.IterOptions
 
 func (s *Storage) NewIter(opts *IterOptions) (*pebble.Iterator, error) {

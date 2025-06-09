@@ -16,7 +16,6 @@ type RaftCore struct {
 	raftcomm.UnimplementedRaftCommunicationServer
 	Info  nodeInfo
 	Peers []nodeInfo
-	Sm    *curlyraft.StateMachine
 
 	node       *node
 	grpcServer *grpc.Server
@@ -26,7 +25,7 @@ type RaftCore struct {
 	quorumSize    uint16
 }
 
-func NewRaftCore(cfg config.NodeCfg, sm *curlyraft.StateMachine) *RaftCore {
+func NewRaftCore(cfg config.NodeCfg, sm curlyraft.StateMachine) *RaftCore {
 	peerStrParse := func(peerStr string) []nodeInfo {
 		out := make([]nodeInfo, 0)
 		peerStrList := strings.Split(peerStr, ",")
@@ -46,8 +45,7 @@ func NewRaftCore(cfg config.NodeCfg, sm *curlyraft.StateMachine) *RaftCore {
 			netAddr: cfg.NetAddr,
 		},
 		Peers:         peerStrParse(cfg.Peers),
-		node:          newNode(cfg.StorageDir),
-		Sm:            sm,
+		node:          newNode(cfg.StorageDir, sm),
 		receivedVotes: 0,
 		quorumSize:    0,
 	}
@@ -61,7 +59,7 @@ func (rc *RaftCore) Start() error {
 	log.Printf("[RaftCore] Start listening on %s\n", rc.Info.netAddr)
 	lis, err := net.Listen("tcp", rc.Info.netAddr)
 	if err != nil {
-		log.Printf("[RaftCore] Failed to listen on %s: %w", rc.Info.netAddr, err)
+		log.Printf("[RaftCore] Failed to listen on %s: %v", rc.Info.netAddr, err)
 		return err
 	}
 

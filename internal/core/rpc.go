@@ -10,16 +10,94 @@ import (
 )
 
 const (
-	RPCTimeout = time.Millisecond * 100
+	RPCTimeout        = time.Millisecond * 100
+	HeartbeatInterval = time.Millisecond * 50
 )
 
 func (rc *RaftCore) AppendEntries(ctx context.Context, request *raftcomm.AppendEntriesRequest) (*raftcomm.AppendEntriesResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	lTerm := request.GetTerm()
+	curTerm, err := rc.node.getCurrentTerm()
+	if err != nil {
+		log.Printf("[RPC Server] AppendEntries: Error while getting current term: %v\n", err)
+		return nil, err
+	}
+	if lTerm < curTerm {
+		return &raftcomm.AppendEntriesResponse{
+			Term:    curTerm,
+			Success: false,
+		}, nil
+	} else if lTerm > curTerm {
+		if err := rc.node.setCurrentTerm(lTerm); err != nil {
+			log.Printf("[RPC Server] AppendEntries: Error while setting new term: %v\n", err)
+			return nil, err
+		}
+		rc.node.state = Follower
+		rc.receivedVotes = 0
+		rc.node.tickHeartbeat()
+	}
+
+	// Consistency check
+	lPrevIndex := request.GetPrevLogIndex()
+	lPrevTerm := request.GetPrevLogTerm()
+
+	if lPrevIndex > rc.node.lastLogIndex {
+		return &raftcomm.AppendEntriesResponse{
+			Term:    curTerm,
+			Success: false,
+		}, nil
+	}
+	logs, err := rc.node.getLog()
+	if err != nil {
+		log.Printf("[RPC Server] AppendEntries: Error while getting logs: %v\n", err)
+		return nil, err
+	}
+	if logs[lPrevIndex].logTerm != lPrevTerm {
+		return &raftcomm.AppendEntriesResponse{
+			Term:    curTerm,
+			Success: false,
+		}, nil
+	}
+	if err := rc.node.deleteConflicts(lPrevIndex + 1); err != nil {
+		log.Printf("[RPC Server] AppendEntries: Error while deleting conflicts: %v\n", err)
+		return nil, err
+	}
+	rc.node.lastLogIndex = lPrevIndex
+	rc.node.lastLogTerm = lPrevTerm
+
+	// Append new entries the leader sent
+	lEntries := request.GetEntries()
+	for _, e := range lEntries {
+		entry := &logEntry{
+			logTerm:  e.LogTerm,
+			logIndex: e.LogIndex,
+			command:  e.Command,
+		}
+		if err := rc.node.appendEntry(entry); err != nil {
+			return nil, err
+		}
+	}
+
+	// Advance commit index
+	lCommit := request.GetLeaderCommit()
+	if lCommit > rc.node.commitIndex {
+		rc.node.commitIndex = min(lCommit, rc.node.lastLogIndex)
+	}
+	rc.node.applyEntries()
+
+	lId := request.GetLeaderId()
+	rc.node.leaderId = rc.getPeerInfo(lId)
+	return &raftcomm.AppendEntriesResponse{
+		Term:    lCommit,
+		Success: true,
+	}, nil
 }
 
 func (rc *RaftCore) RequestVote(ctx context.Context, request *raftcomm.RequestVoteRequest) (*raftcomm.RequestVoteResponse, error) {
 	rc.mu.Lock()
+	defer rc.mu.Unlock()
 
 	curTerm, err := rc.node.getCurrentTerm()
 	if err != nil {
@@ -28,7 +106,6 @@ func (rc *RaftCore) RequestVote(ctx context.Context, request *raftcomm.RequestVo
 	}
 	candTerm := request.GetTerm()
 	if curTerm > candTerm {
-		rc.mu.Unlock()
 		return &raftcomm.RequestVoteResponse{
 			Term:        curTerm,
 			VoteGranted: false,
@@ -54,7 +131,6 @@ func (rc *RaftCore) RequestVote(ctx context.Context, request *raftcomm.RequestVo
 		rc.node.lastLogIndex <= candLastLogIndex &&
 		rc.node.lastLogTerm <= candLastLogTerm {
 
-		rc.mu.Unlock()
 		return &raftcomm.RequestVoteResponse{
 			Term:        curTerm,
 			VoteGranted: false,
@@ -65,7 +141,6 @@ func (rc *RaftCore) RequestVote(ctx context.Context, request *raftcomm.RequestVo
 		log.Printf("[RPC Server] RequestVote: Error while setting votedFor: %v\n", err)
 		return nil, err
 	}
-	rc.mu.Unlock()
 	return &raftcomm.RequestVoteResponse{
 		Term:        curTerm,
 		VoteGranted: true,
@@ -134,9 +209,88 @@ func (rc *RaftCore) voteRequest(netAddr string, term uint32) {
 	}
 }
 
-func (rc *RaftCore) heartbeatLoop() {
-	for {
-		log.Println("[Leader] heartbeating...")
-		time.Sleep(time.Second)
+func (rc *RaftCore) sendHeartbeat(ctx context.Context, peer nodeInfo, term uint32) {
+	client, conn, closer, err := rc.buildClient(peer.netAddr)
+	if err != nil {
+		log.Fatalf("[rpcClient] Failed to build grpc client: %v\n", err)
 	}
+	defer closer(conn)
+
+	rc.mu.Lock()
+	prevLogIndex := rc.node.nextIndex[peer.id]
+	prevLogTerm, ok := rc.node.getLogTerm(prevLogIndex)
+	if !ok {
+		log.Fatalf("[sendHeartbeat] Failed to get log term based on idx.\n")
+	}
+	commitIndex := rc.node.commitIndex
+	rc.mu.Unlock()
+
+	rpcCtx, cancel := context.WithTimeout(ctx, RPCTimeout)
+	defer cancel()
+
+	res, err := client.AppendEntries(rpcCtx, &raftcomm.AppendEntriesRequest{
+		Term:         term,
+		LeaderId:     rc.Info.id,
+		PrevLogIndex: prevLogIndex,
+		PrevLogTerm:  prevLogTerm,
+		Entries:      nil,
+		LeaderCommit: commitIndex,
+	})
+	if err != nil {
+		log.Printf("[sendHeartbeat] AppendEntries to %s failed: %v", peer.netAddr, err)
+		return
+	}
+
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	nodeTerm := res.GetTerm()
+	if nodeTerm > term {
+		log.Printf("[sendHeartbeat] saw higher term %d > %d, stepping down", nodeTerm, term)
+		rc.node.state = Follower
+		rc.node.leaderCancel()
+		return
+	}
+
+	isSuccess := res.GetSuccess()
+	if isSuccess {
+		// follower accepted
+		rc.node.nextIndex[peer.id] = prevLogIndex + 1
+		rc.node.matchIndex[peer.id] = prevLogIndex
+	} else {
+		// follower rejected
+		if rc.node.nextIndex[peer.id] > 1 {
+			rc.node.nextIndex[peer.id]--
+		}
+	}
+}
+
+func (rc *RaftCore) heartbeatLoop(ctx context.Context, term uint32) {
+	ticker := time.NewTicker(HeartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// leaderCtx was canceled
+			log.Println("[Leader] heartbeatLoop exiting")
+			return
+
+		case <-ticker.C:
+			// send actual AppendEntries heartbeats here
+			log.Println("[Leader] heartbeating…")
+			for _, p := range rc.Peers {
+				go rc.sendHeartbeat(ctx, p, term)
+			}
+		}
+	}
+}
+
+func (rc *RaftCore) getPeerInfo(nodeId string) *nodeInfo {
+	for _, p := range rc.Peers {
+		if p.id == nodeId {
+			return &p
+		}
+	}
+	return nil
 }

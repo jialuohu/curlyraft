@@ -1,121 +1,64 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"github.com/jialuohu/curlyraft/api"
 	"github.com/jialuohu/curlyraft/config"
 	"log"
-	"sync"
 )
 
 type smDummy struct{}
 
-func (s smDummy) Apply(command []byte) (result []byte, err error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s smDummy) Snapshot() (snapshot []byte, err error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s smDummy) Restore(snapshot []byte) (err error) {
-	//TODO implement me
-	panic("implement me")
-}
+func (s smDummy) Apply(command []byte) ([]byte, error) { panic("TODO") }
+func (s smDummy) Snapshot() ([]byte, error)            { panic("TODO") }
+func (s smDummy) Restore(snapshot []byte) error        { panic("TODO") }
 
 func main() {
-	var wg sync.WaitGroup
-	wg.Add(3)
+	// 1) Declare flags
+	id := flag.String("id", "", "this node's ID (e.g. nodeA)")
+	listen := flag.String("addr", "", "this node's listen address (e.g. localhost:21001)")
+	peersCSV := flag.String("peers", "", "comma-separated peers, each as ID/addr")
+	storage := flag.String("data", "", "local storage directory (e.g. storage/21001)")
 
-	go server1()
-	go server2()
-	go server3()
+	flag.Parse()
 
-	wg.Wait()
-}
+	// 2) Validate
+	if *id == "" || *listen == "" || *peersCSV == "" || *storage == "" {
+		log.Fatalf("usage: %s --id ID --addr ADDR --peers ID1/ADDR1,ID2/ADDR2 --data DIR",
+			flag.CommandLine.Name())
+	}
 
-func server1() {
-	sm := smDummy{}
+	// 3) Build the config
 	cfg := config.NewNodeCfg(
-		"nodeA",
-		"localhost:21001",
-		"nodeB/localhost:21002,nodeC/localhost:21003",
-		"storage/21001",
+		*id,
+		*listen,
+		*peersCSV,
+		*storage,
 	)
 
-	log.Println("[server1] Server starting...")
+	// 4) Prefix logs with node ID + timestamp flags
+	log.SetPrefix(fmt.Sprintf("[%s] ", cfg.Id))
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
-	rc, err := api.NewServer(cfg, sm)
-	if err != nil {
-		log.Fatalf("[server1] StartServer Error: %v\n", err)
-	}
-
-	log.Println("[server1] Server running...")
-	if err := api.RunServer(rc); err != nil {
-		log.Fatalf("[server1] RunServer Error: %v\n", err)
-	}
-
-	log.Println("[server1] Server stopping...")
-	if err := api.StopServer(rc); err != nil {
-		log.Fatalf("[server1] StopServer Error: %v\n", err)
-	}
-
-	log.Println("[server1] Server stopped successfully...")
-}
-func server2() {
+	// 5) Instantiate your dummy state machine (or real one!)
 	sm := smDummy{}
-	cfg := config.NewNodeCfg(
-		"nodeB",
-		"localhost:21002",
-		"nodeA/localhost:21001,nodeC/localhost:21003",
-		"storage/21002",
-	)
 
-	log.Println("[server2] Server starting...")
-
+	// 6) Create the server
 	rc, err := api.NewServer(cfg, sm)
 	if err != nil {
-		log.Fatalf("[server2] StartServer Error: %v\n", err)
+		log.Fatalf("[%-6s] StartServer Error: %v", cfg.Id, err)
 	}
 
-	log.Println("[server2] Server running...")
+	// 7) Run until interrupted
+	log.Printf("[%s] Server running...", cfg.Id)
 	if err := api.RunServer(rc); err != nil {
-		log.Fatalf("[server2] RunServer Error: %v\n", err)
+		log.Fatalf("[%s] RunServer Error: %v", cfg.Id, err)
 	}
+	log.Printf("[%s] Server stopping...", cfg.Id)
 
-	log.Println("[server2] Server stopping...")
 	if err := api.StopServer(rc); err != nil {
-		log.Fatalf("[server2] StopServer Error: %v\n", err)
+		log.Fatalf("[%s] StopServer Error: %v", cfg.Id, err)
 	}
-
-	log.Println("[server2] Server stopped successfully...")
-}
-func server3() {
-	sm := smDummy{}
-	cfg := config.NewNodeCfg(
-		"nodeC",
-		"localhost:21003",
-		"nodeB/localhost:21002,nodeA/localhost:21001",
-		"storage/21003",
-	)
-
-	log.Println("[server3] Server starting...")
-
-	rc, err := api.NewServer(cfg, sm)
-	if err != nil {
-		log.Fatalf("[server3] StartServer Error: %v\n", err)
-	}
-
-	log.Println("[server3] Server running...")
-	if err := api.RunServer(rc); err != nil {
-		log.Fatalf("[server3] RunServer Error: %v\n", err)
-	}
-
-	log.Println("[server3] Server stopping...")
-	if err := api.StopServer(rc); err != nil {
-		log.Fatalf("[server3] StopServer Error: %v\n", err)
-	}
-
-	log.Println("[server3] Server stopped successfully...")
+	log.Printf("[%s] Server stopped cleanly.", cfg.Id)
 }

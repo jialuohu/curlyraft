@@ -17,5 +17,8 @@ proto:
 		$(PROTO_FILES)
 
 .PHONY: run
+SCRIPTS_DIR := scripts
+STORAGE_DIR := storage
+CMD_DIR := cmd/raftnode
 run: proto
-	@go run cmd/raftnode/main.go
+	$(SCRIPTS_DIR)/simple_example.sh $(STORAGE_DIR) $(CMD_DIR)

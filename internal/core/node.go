@@ -1,8 +1,10 @@
 package core
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/jialuohu/curlyraft"
 	"github.com/jialuohu/curlyraft/internal/persistence"
 	"log"
 	"sync"
@@ -24,7 +26,8 @@ type node struct {
 	timer       *time.Timer
 	heartbeatCh chan struct{}
 	stopCh      chan struct{}
-	//sm          *curlyraft.StateMachine
+	leaderId    *nodeInfo
+	sm          curlyraft.StateMachine
 
 	// persistence
 	lastLogIndex uint32
@@ -32,11 +35,13 @@ type node struct {
 	storage      *persistence.Storage
 
 	// leader only
-	nextIndex  []uint32
-	matchIndex []uint32
+	nextIndex    map[string]uint32
+	matchIndex   map[string]uint32
+	leaderCtx    context.Context
+	leaderCancel context.CancelFunc
 }
 
-func newNode(storageDir string) *node {
+func newNode(storageDir string, sm curlyraft.StateMachine) *node {
 	n := &node{
 		mu:           sync.Mutex{},
 		state:        Follower,
@@ -45,11 +50,15 @@ func newNode(storageDir string) *node {
 		timer:        nil,
 		heartbeatCh:  make(chan struct{}, 1),
 		stopCh:       make(chan struct{}),
+		leaderId:     nil,
+		sm:           sm,
 		lastLogIndex: 0,
 		lastLogTerm:  0,
 		storage:      persistence.NewStorage(storageDir),
 		nextIndex:    nil,
 		matchIndex:   nil,
+		leaderCtx:    nil,
+		leaderCancel: nil,
 	}
 
 	if err := n.setCurrentTerm(InitialTerm); err != nil {
@@ -176,7 +185,96 @@ func (n *node) appendEntry(entry *logEntry) error {
 	return nil
 }
 
+func (n *node) getLogTerm(idx uint32) (uint32, bool) {
+	if idx == 0 {
+		return 0, true
+	}
+	raw, closer, err := n.storage.Get(keyForIndex(idx))
+	if err != nil {
+		return 0, false
+	}
+	defer func() {
+		if err := closer.Close(); err != nil {
+			log.Printf("[getLogTerm] Failed to close storage: %v\n", err)
+		}
+	}()
+
+	entry, err := bytesToLogEntry(raw)
+	if err != nil {
+		return 0, false
+	}
+
+	return entry.logTerm, true
+}
+
 func (n *node) stopNode() {
 	close(n.heartbeatCh)
 	close(n.stopCh)
+	if n.leaderCancel != nil {
+		n.leaderCancel()
+	}
+}
+
+func (n *node) deleteConflicts(fromIndex uint32) error {
+	startKey := keyForIndex(fromIndex)
+	endKey := append([]byte(LogPrefix), 0xFF)
+	it, err := n.storage.NewIter(&persistence.IterOptions{
+		LowerBound: startKey,
+		UpperBound: endKey,
+	})
+	if err != nil {
+		log.Printf("[deleteConflicts] Iterator error: %v", err)
+		return err
+	}
+	defer func() {
+		if err := it.Close(); err != nil {
+			log.Printf("[deleteConflicts] Failed to close iterator: %v", err)
+		}
+	}()
+
+	for ok := it.First(); ok; ok = it.Next() {
+		key := it.Key()
+		if err := n.storage.Delete(key); err != nil {
+			log.Printf("[deleteConflicts] Failed to delete %s: %v", key, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (n *node) applyEntries() {
+	for {
+		next := n.lastApplied + 1
+		if next > n.commitIndex {
+			return
+		}
+
+		// read that entry
+		raw, closer, err := n.storage.Get(keyForIndex(next))
+		if err != nil {
+			log.Printf("[applyEntries] Get entry %d: %v\n", next, err)
+			return
+		}
+		data := make([]byte, len(raw))
+		copy(data, raw)
+		if err := closer.Close(); err != nil {
+			log.Printf("[applyEntries] Failed to close %v\n", err)
+			return
+		}
+
+		entry, err := bytesToLogEntry(data)
+		if err != nil {
+			log.Printf("[applyEntries] Parse entry %d: %v\n", next, err)
+			return
+		}
+
+		// now apply to your state machine
+		if _, err := n.sm.Apply(entry.command); err != nil {
+			log.Printf("[applyEntries] state machine error at %d: %v", next, err)
+		}
+
+		// mark it applied
+		n.lastApplied = next
+	}
 }

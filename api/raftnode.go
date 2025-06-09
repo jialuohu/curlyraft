@@ -7,7 +7,7 @@ import (
 )
 
 func NewServer(cfg config.NodeCfg, sm curlyraft.StateMachine) (*core.RaftCore, error) {
-	rc := core.NewRaftCore(cfg, &sm)
+	rc := core.NewRaftCore(cfg, sm)
 	err := rc.Start()
 	return rc, err
 }

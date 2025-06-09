@@ -40,6 +40,13 @@ func logEntryToKeyBytes(entry *logEntry, lastLogIndex uint32) ([]byte, []byte) {
 	return key, buf
 }
 
+func keyForIndex(idx uint32) []byte {
+	b := make([]byte, len(LogPrefix)+4)
+	copy(b, LogPrefix)
+	binary.BigEndian.PutUint32(b[len(LogPrefix):], idx)
+	return b
+}
+
 const (
 	InitialTerm   = 0
 	VotedForNoOne = "none"
