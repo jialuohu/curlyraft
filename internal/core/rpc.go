@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	//RPCTimeout        = time.Millisecond * 100
-	RPCTimeout = time.Second * 10
-	//HeartbeatInterval = time.Millisecond * 50
-	HeartbeatInterval = time.Second * 1
+	RPCTimeout = time.Millisecond * 100
+	//RPCTimeout = time.Second * 10
+
+	HeartbeatInterval = time.Millisecond * 50
+	//HeartbeatInterval = time.Second * 1
 )
 
 func (rc *RaftCore) AppendEntries(ctx context.Context, request *raftcomm.AppendEntriesRequest) (*raftcomm.AppendEntriesResponse, error) {
@@ -284,14 +285,7 @@ func (rc *RaftCore) voteRequest(netAddr string, term uint32) {
 	}
 }
 
-func (rc *RaftCore) sendHeartbeat(ctx context.Context, peer nodeInfo, term uint32) {
-	log.Printf("%s Start sending heartbeat to %s/%s\n",
-		clog.CGreenRc("sendHeartbeat"), peer.id, peer.netAddr)
-	client, conn, closer, err := rc.buildClient(peer.netAddr)
-	if err != nil {
-		log.Fatalf("%s Failed to build grpc client: %v\n", clog.CRedRc("sendHeartbeat"), err)
-	}
-	defer closer(conn)
+func (rc *RaftCore) sendHeartbeat(ctx context.Context, client raftcomm.RaftCommunicationClient, peer nodeInfo, term uint32) {
 
 	rc.mu.Lock()
 	// since heartbeat just send nothing
@@ -364,9 +358,30 @@ func (rc *RaftCore) sendHeartbeat(ctx context.Context, peer nodeInfo, term uint3
 }
 
 func (rc *RaftCore) heartbeatLoop(ctx context.Context, term uint32) {
-	for _, p := range rc.Peers {
-		go rc.sendHeartbeat(ctx, p, term)
+	type clientConnInfo struct {
+		conn   *grpc.ClientConn
+		closer func(conn *grpc.ClientConn)
 	}
+
+	peerConns := make([]clientConnInfo, 0, len(rc.Peers))
+	for _, p := range rc.Peers {
+		log.Printf("%s Start sending heartbeat to %s/%s\n", clog.CGreenRc("heartbeatLoop"), p.id, p.netAddr)
+		client, conn, closer, err := rc.buildClient(p.netAddr)
+		if err != nil {
+			log.Fatalf("%s Failed to build grpc client: %v\n", clog.CRedRc("heartbeatLoop"), err)
+		}
+		peerConns = append(peerConns, clientConnInfo{
+			conn:   conn,
+			closer: closer,
+		})
+		go rc.sendHeartbeat(ctx, client, p, term)
+	}
+	defer func(peerConns []clientConnInfo) {
+		for _, c := range peerConns {
+			c.closer(c.conn)
+		}
+	}(peerConns)
+
 	log.Printf("%s Start a new ticker for heartbeat\n", clog.CGreenRc("heartbeatLoop"))
 	ticker := time.NewTicker(HeartbeatInterval)
 	defer ticker.Stop()
@@ -381,8 +396,9 @@ func (rc *RaftCore) heartbeatLoop(ctx context.Context, term uint32) {
 		case <-ticker.C:
 			// send actual AppendEntries heartbeats here
 			log.Printf("%s heartbeating…\n", clog.CGreenRc("heartbeatLoop"))
-			for _, p := range rc.Peers {
-				go rc.sendHeartbeat(ctx, p, term)
+			for i, p := range rc.Peers {
+				client := raftcomm.NewRaftCommunicationClient(peerConns[i].conn)
+				go rc.sendHeartbeat(ctx, client, p, term)
 			}
 		}
 	}

@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	//TimeoutLowerBound = 150 * time.Millisecond
-	TimeoutLowerBound = 5 * time.Second
-	//TimeoutRange      = 150 * time.Millisecond
-	TimeoutRange = 5 * time.Second
+	TimeoutLowerBound = 150 * time.Millisecond
+	//TimeoutLowerBound = 5 * time.Second
+
+	TimeoutRange = 150 * time.Millisecond
+	//TimeoutRange = 5 * time.Second
 )
 
 func (rc *RaftCore) roleLoop() error {
