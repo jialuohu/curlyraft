@@ -1,9 +1,11 @@
 package core
 
+import "C"
 import (
 	"errors"
 	"github.com/jialuohu/curlyraft"
 	"github.com/jialuohu/curlyraft/config"
+	"github.com/jialuohu/curlyraft/internal/clog"
 	raftcomm "github.com/jialuohu/curlyraft/internal/proto"
 	"google.golang.org/grpc"
 	"log"
@@ -26,6 +28,7 @@ type RaftCore struct {
 }
 
 func NewRaftCore(cfg config.NodeCfg, sm curlyraft.StateMachine) *RaftCore {
+	log.Printf("%s Creating new raft core\n", clog.CGreenRc("NewRaftCore"))
 	peerStrParse := func(peerStr string) []nodeInfo {
 		out := make([]nodeInfo, 0)
 		peerStrList := strings.Split(peerStr, ",")
@@ -56,10 +59,10 @@ func NewRaftCore(cfg config.NodeCfg, sm curlyraft.StateMachine) *RaftCore {
 }
 
 func (rc *RaftCore) Start() error {
-	log.Printf("[RaftCore] Start listening on %s\n", rc.Info.netAddr)
+	log.Printf("%s Start listening on %s\n", clog.CGreenRc("Start"), rc.Info.netAddr)
 	lis, err := net.Listen("tcp", rc.Info.netAddr)
 	if err != nil {
-		log.Printf("[RaftCore] Failed to listen on %s: %v", rc.Info.netAddr, err)
+		log.Printf("%s Failed to listen on %s: %v", clog.CRedRc("Start"), rc.Info.netAddr, err)
 		return err
 	}
 
@@ -67,19 +70,21 @@ func (rc *RaftCore) Start() error {
 	raftcomm.RegisterRaftCommunicationServer(grpcServer, rc)
 	rc.grpcServer = grpcServer
 	go func() {
-		log.Println("[RpcServer] The gRPC Server Start serving...")
+		log.Printf("%s The gRPC Server Start serving...", clog.CGreenRc("Start"))
 		if err := grpcServer.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			log.Fatalf("[RaftCore] The gRPC Server serve error: %v", err)
+			log.Fatalf("%s The gRPC Server serve error: %v", clog.CRedRc("Start"), err)
 		}
 	}()
 	return nil
 }
 
 func (rc *RaftCore) Run() error {
+	log.Printf("%s Start running rc.roleLoop()\n", clog.CGreenRc("Run"))
 	return rc.roleLoop()
 }
 
 func (rc *RaftCore) Stop() {
+	log.Printf("%s Stop running raft core\n", clog.CGreenRc("Stop"))
 	rc.node.stopNode()
 	if rc.grpcServer != nil {
 		rc.grpcServer.GracefulStop()

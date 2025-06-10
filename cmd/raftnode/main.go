@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/jialuohu/curlyraft/api"
 	"github.com/jialuohu/curlyraft/config"
 	"log"
+	"os"
 )
 
 type smDummy struct{}
@@ -15,6 +17,8 @@ func (s smDummy) Snapshot() ([]byte, error)            { panic("TODO") }
 func (s smDummy) Restore(snapshot []byte) error        { panic("TODO") }
 
 func main() {
+	var c = color.New(color.FgCyan).Add(color.Bold)
+
 	// 1) Declare flags
 	id := flag.String("id", "", "this node's ID (e.g. nodeA)")
 	listen := flag.String("addr", "", "this node's listen address (e.g. localhost:21001)")
@@ -38,27 +42,27 @@ func main() {
 	)
 
 	// 4) Prefix logs with node ID + timestamp flags
-	log.SetPrefix(fmt.Sprintf("[%s] ", cfg.Id))
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-
+	l := log.New(os.Stdout, c.Sprintf(fmt.Sprintf("[%s/%s] ", cfg.Id, cfg.NetAddr)), log.Ldate|log.Ltime|log.Lmicroseconds)
 	// 5) Instantiate your dummy state machine (or real one!)
 	sm := smDummy{}
 
 	// 6) Create the server
+	l.Println("Server Starting...")
 	rc, err := api.NewServer(cfg, sm)
 	if err != nil {
-		log.Fatalf("[%-6s] StartServer Error: %v", cfg.Id, err)
+		l.Fatalf("[%-6s] StartServer Error: %v", cfg.Id, err)
 	}
 
 	// 7) Run until interrupted
-	log.Printf("[%s] Server running...", cfg.Id)
+
+	l.Println("Server running...")
 	if err := api.RunServer(rc); err != nil {
-		log.Fatalf("[%s] RunServer Error: %v", cfg.Id, err)
+		l.Fatalf("[%s] RunServer Error: %v\n", cfg.Id, err)
 	}
-	log.Printf("[%s] Server stopping...", cfg.Id)
+	l.Println("Server stopping...")
 
 	if err := api.StopServer(rc); err != nil {
-		log.Fatalf("[%s] StopServer Error: %v", cfg.Id, err)
+		l.Fatalf("[%s] StopServer Error: %v", cfg.Id, err)
 	}
-	log.Printf("[%s] Server stopped cleanly.", cfg.Id)
+	l.Println("Server stopped cleanly")
 }

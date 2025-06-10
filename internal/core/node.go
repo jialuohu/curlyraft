@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/jialuohu/curlyraft"
+	"github.com/jialuohu/curlyraft/internal/clog"
 	"github.com/jialuohu/curlyraft/internal/persistence"
 	"log"
 	"sync"
@@ -57,16 +58,20 @@ func newNode(storageDir string, sm curlyraft.StateMachine) *node {
 		storage:      persistence.NewStorage(storageDir),
 		nextIndex:    nil,
 		matchIndex:   nil,
-		leaderCtx:    nil,
+		leaderCtx:    context.Background(),
 		leaderCancel: nil,
 	}
 
 	if err := n.setCurrentTerm(InitialTerm); err != nil {
-		log.Fatalf("[newNode] Failed to initialize term value into storage: %v\n", err)
+		log.Fatalf("%s Failed to initialize term value into storage: %v\n", clog.CRedNode("newNode"), err)
 	}
 	if err := n.setVotedFor(VotedForNoOne); err != nil {
-		log.Fatalf("[newNode] Failed to initialize votedFor value into storage: %v\n", err)
+		log.Fatalf("%s Failed to initialize votedFor value into storage: %v\n", clog.CRedNode("newNode"), err)
 	}
+
+	//if err := n.storage.Set([]byte(LogPrefix), []byte("")); err != nil {
+	//	log.Fatalf("%s Failed to initialize log: %v\n", clog.CRedNode("newNode"), err)
+	//}
 
 	return n
 }
@@ -187,10 +192,12 @@ func (n *node) appendEntry(entry *logEntry) error {
 
 func (n *node) getLogTerm(idx uint32) (uint32, bool) {
 	if idx == 0 {
+		log.Printf("%s idx is 0, return 0, true\n", clog.CGreenNode("getLogTerm"))
 		return 0, true
 	}
 	raw, closer, err := n.storage.Get(keyForIndex(idx))
 	if err != nil {
+		log.Printf("%s Got error while getting key: %s : %v\n", clog.CRedNode("getLogTerm"), keyForIndex(idx), err)
 		return 0, false
 	}
 	defer func() {
@@ -201,6 +208,7 @@ func (n *node) getLogTerm(idx uint32) (uint32, bool) {
 
 	entry, err := bytesToLogEntry(raw)
 	if err != nil {
+		log.Printf("%s Got error while doing bytesToLogEntry: %v\n", clog.CRedNode("getLogTerm"), err)
 		return 0, false
 	}
 
