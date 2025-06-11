@@ -6,6 +6,8 @@ import (
 	"log"
 )
 
+//TODO The storage part can actually be designed as interface to support multiple different storages
+
 type Storage struct {
 	db *pebble.DB
 }

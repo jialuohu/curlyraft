@@ -34,10 +34,10 @@ func (rc *RaftCore) roleLoop() error {
 		select {
 		case <-rc.node.timer.C:
 			rc.mu.Lock()
-			isFollower := rc.node.state == Follower
+			notLeader := rc.node.state == Follower || rc.node.state == Candidate
 			rc.mu.Unlock()
 
-			if isFollower {
+			if notLeader {
 				log.Printf("%s Timeout! Start election\n", clog.CBlueRc("roleLoop"))
 				if err := rc.startElection(); err != nil {
 					log.Printf("%s Error during startElection: %v\n", clog.CRedRc("roleLoop"), err)
@@ -91,7 +91,8 @@ func (rc *RaftCore) startElection() error {
 		rc.receivedVotes++
 		log.Printf("%s Start sending voteRequest to its peers\n", clog.CGreenRc("startElection"))
 		for _, peer := range rc.Peers {
-			go rc.voteRequest(peer.netAddr, newTerm)
+			rc.node.leaderBecomeCtx, rc.node.leaderBecomeCancel = context.WithCancel(context.Background())
+			go rc.voteRequest(rc.node.leaderBecomeCtx, peer.netAddr, newTerm)
 		}
 		log.Printf("%s Done with sending\n", clog.CGreenRc("startElection"))
 	} else if rc.node.state == Candidate {
@@ -99,12 +100,13 @@ func (rc *RaftCore) startElection() error {
 		rc.receivedVotes = 1 // empty previous term votes + vote itself
 		log.Printf("%s Start sending voteRequest to its peers\n", clog.CGreenRc("startElection"))
 		for _, peer := range rc.Peers {
-			go rc.voteRequest(peer.netAddr, newTerm)
+			rc.node.leaderBecomeCtx, rc.node.leaderBecomeCancel = context.WithCancel(context.Background())
+			go rc.voteRequest(rc.node.leaderBecomeCtx, peer.netAddr, newTerm)
 		}
 	}
 
-	log.Printf("%s Empty itself votedFor\n", clog.CGreenRc("startElection"))
-	if err := rc.node.setVotedFor(VotedForNoOne); err != nil {
+	log.Printf("%s Node votedFor itself!!!\n", clog.CBlueRc("startElection"))
+	if err := rc.node.setVotedFor(rc.Info.id); err != nil {
 		log.Printf("%s Failed to set votedFor\n", clog.CRedRc("startElection"))
 	}
 
@@ -126,17 +128,18 @@ func (rc *RaftCore) becomeLeader(term uint32) {
 		rc.node.matchIndex[p.id] = 0
 	}
 
-	ctx, cancel := context.WithCancel(rc.node.leaderCtx)
-	rc.node.leaderCancel = cancel
+	rc.node.leaderCtx, rc.node.leaderCancel = context.WithCancel(context.Background())
+	// Once the node becomes leader, will call cancel.
+	rc.node.leaderBecomeCancel()
 
 	log.Printf("%s Start heartbeatLoop\n", clog.CGreenRc("becomeLeader"))
-	go rc.heartbeatLoop(ctx, term)
+	go rc.heartbeatLoop(rc.node.leaderCtx, term)
 	log.Printf("%s Start leader start serving\n", clog.CGreenRc("becomeLeader"))
-	go rc.leaderStartServing(ctx)
+	go rc.leaderStartServing(rc.node.leaderCtx)
 }
 
 func (rc *RaftCore) leaderStartServing(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {

@@ -36,30 +36,22 @@ type node struct {
 	storage      *persistence.Storage
 
 	// leader only
-	nextIndex    map[string]uint32
-	matchIndex   map[string]uint32
-	leaderCtx    context.Context
-	leaderCancel context.CancelFunc
+	nextIndex          map[string]uint32
+	matchIndex         map[string]uint32
+	leaderCtx          context.Context
+	leaderBecomeCtx    context.Context
+	leaderCancel       context.CancelFunc
+	leaderBecomeCancel context.CancelFunc
 }
 
 func newNode(storageDir string, sm curlyraft.StateMachine) *node {
 	n := &node{
-		mu:           sync.Mutex{},
-		state:        Follower,
-		commitIndex:  0,
-		lastApplied:  0,
-		timer:        nil,
-		heartbeatCh:  make(chan struct{}, 1),
-		stopCh:       make(chan struct{}),
-		leaderId:     nil,
-		sm:           sm,
-		lastLogIndex: 0,
-		lastLogTerm:  0,
-		storage:      persistence.NewStorage(storageDir),
-		nextIndex:    nil,
-		matchIndex:   nil,
-		leaderCtx:    context.Background(),
-		leaderCancel: nil,
+		mu:          sync.Mutex{},
+		state:       Follower,
+		heartbeatCh: make(chan struct{}, 1),
+		stopCh:      make(chan struct{}),
+		sm:          sm,
+		storage:     persistence.NewStorage(storageDir),
 	}
 
 	if err := n.setCurrentTerm(InitialTerm); err != nil {
@@ -68,6 +60,9 @@ func newNode(storageDir string, sm curlyraft.StateMachine) *node {
 	if err := n.setVotedFor(VotedForNoOne); err != nil {
 		log.Fatalf("%s Failed to initialize votedFor value into storage: %v\n", clog.CRedNode("newNode"), err)
 	}
+
+	//n.leaderCtx, n.leaderCancel = context.WithCancel(context.Background())
+	//n.leaderBecomeCtx, n.leaderBecomeCancel = context.WithCancel(context.Background())
 
 	//if err := n.storage.Set([]byte(LogPrefix), []byte("")); err != nil {
 	//	log.Fatalf("%s Failed to initialize log: %v\n", clog.CRedNode("newNode"), err)
@@ -177,6 +172,8 @@ func (n *node) getLog() ([]*logEntry, error) {
 }
 
 func (n *node) appendEntry(entry *logEntry) error {
+	fName := clog.CGreenNode("appendEntry")
+	log.Printf("%s Start append an entry:logTerm=%d,logIndex=%d\n", fName, entry.logTerm, entry.logIndex)
 	logIndex := n.lastLogIndex + 1
 	key, val := logEntryToKeyBytes(entry, n.lastLogIndex)
 	if err := n.storage.Set(key, val); err != nil {
@@ -184,6 +181,7 @@ func (n *node) appendEntry(entry *logEntry) error {
 		return err
 	}
 	n.lastLogIndex = logIndex
+	log.Printf("%s Also update lastLogTerm\n", fName)
 	if n.lastLogTerm < entry.logTerm {
 		n.lastLogTerm = entry.logTerm
 	}
@@ -215,15 +213,8 @@ func (n *node) getLogTerm(idx uint32) (uint32, bool) {
 	return entry.logTerm, true
 }
 
-func (n *node) stopNode() {
-	close(n.heartbeatCh)
-	close(n.stopCh)
-	if n.leaderCancel != nil {
-		n.leaderCancel()
-	}
-}
-
 func (n *node) deleteConflicts(fromIndex uint32) error {
+	log.Printf("%s Start delete conflicts\n", clog.CGreenNode("deleteConflicts"))
 	startKey := keyForIndex(fromIndex)
 	endKey := append([]byte(LogPrefix), 0xFF)
 	it, err := n.storage.NewIter(&persistence.IterOptions{
@@ -231,58 +222,74 @@ func (n *node) deleteConflicts(fromIndex uint32) error {
 		UpperBound: endKey,
 	})
 	if err != nil {
-		log.Printf("[deleteConflicts] Iterator error: %v", err)
+		log.Printf("%s Iterator error: %v", clog.CRedNode("deleteConflicts"), err)
 		return err
 	}
 	defer func() {
 		if err := it.Close(); err != nil {
-			log.Printf("[deleteConflicts] Failed to close iterator: %v", err)
+			log.Printf("%s Failed to close iterator: %v\n", clog.CRedNode("deleteConflicts"), err)
 		}
 	}()
 
+	log.Printf("%s Looking for the fromIndex:%d\n", clog.CGreenNode("deleteConflicts"), fromIndex)
 	for ok := it.First(); ok; ok = it.Next() {
 		key := it.Key()
 		if err := n.storage.Delete(key); err != nil {
-			log.Printf("[deleteConflicts] Failed to delete %s: %v", key, err)
+			log.Printf("%s Failed to delete %s: %v", clog.CRedNode("deleteConflicts"), key, err)
 			return err
 		}
 	}
 
+	log.Printf("%s Conflicts resolved\n", clog.CGreenNode("deleteConflicts"))
 	return nil
 }
 
 func (n *node) applyEntries() {
+	log.Printf("%s Start apply entires\n", clog.CGreenNode("applyEntries"))
 	for {
 		next := n.lastApplied + 1
+		log.Printf("%s Log entry:%d is going to be applied\n", clog.CGreenNode("applyEntries"), next)
 		if next > n.commitIndex {
+			log.Printf("%s The next:%d is over current node commitIndex:%d!\n", clog.CBlueNode("applyEntries"), next, n.commitIndex)
 			return
 		}
 
 		// read that entry
+		log.Printf("%s Read the bytes of entry\n", clog.CGreenNode("applyEntries"))
 		raw, closer, err := n.storage.Get(keyForIndex(next))
 		if err != nil {
-			log.Printf("[applyEntries] Get entry %d: %v\n", next, err)
+			log.Printf("%s Get entry %d: %v\n", clog.CRedNode("applyEntries"), next, err)
 			return
 		}
 		data := make([]byte, len(raw))
 		copy(data, raw)
 		if err := closer.Close(); err != nil {
-			log.Printf("[applyEntries] Failed to close %v\n", err)
+			log.Printf("%s Failed to close %v\n", clog.CRedNode("applyEntries"), err)
 			return
 		}
 
+		log.Printf("%s Transform the bytes into entry struct\n", clog.CGreenNode("applyEntries"))
 		entry, err := bytesToLogEntry(data)
 		if err != nil {
-			log.Printf("[applyEntries] Parse entry %d: %v\n", next, err)
+			log.Printf("%s Parse entry %d: %v\n", clog.CRedNode("applyEntries"), next, err)
 			return
 		}
 
 		// now apply to your state machine
+		log.Printf("%s State machine applies the command\n", clog.CGreenNode("applyEntries"))
 		if _, err := n.sm.Apply(entry.command); err != nil {
-			log.Printf("[applyEntries] state machine error at %d: %v", next, err)
+			log.Printf("%s State machine error at %d: %v", clog.CRedNode("applyEntries"), next, err)
 		}
 
-		// mark it applied
+		log.Printf("%s Mark the log entry:%d applied\n", clog.CBlueNode("applyEntries"), n.lastApplied)
 		n.lastApplied = next
+	}
+}
+
+func (n *node) stopNode() {
+	close(n.heartbeatCh)
+	close(n.stopCh)
+	if n.leaderCancel != nil {
+		n.leaderCancel()
 	}
 }

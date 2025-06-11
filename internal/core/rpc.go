@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"github.com/jialuohu/curlyraft/internal/clog"
 	raftcomm "github.com/jialuohu/curlyraft/internal/proto"
 	"google.golang.org/grpc"
@@ -14,7 +15,7 @@ const (
 	RPCTimeout = time.Millisecond * 100
 	//RPCTimeout = time.Second * 10
 
-	HeartbeatInterval = time.Millisecond * 50
+	HeartbeatInterval = time.Millisecond * 20
 	//HeartbeatInterval = time.Second * 1
 )
 
@@ -121,9 +122,27 @@ func (rc *RaftCore) AppendEntries(ctx context.Context, request *raftcomm.AppendE
 	log.Printf("%s Applying new entries\n", clog.CGreenRc("AppendEntries"))
 	rc.node.applyEntries()
 
+	// Setup leader id for current follower node
 	lId := request.GetLeaderId()
-	log.Printf("%s Set new leaderId:%s in its state node\n", clog.CGreenRc("AppendEntries"), lId)
-	rc.node.leaderId = rc.getPeerInfo(lId)
+	log.Printf("%s Set leaderId:%s in its state node\n", clog.CGreenRc("AppendEntries"), lId)
+	getPeerInfo := func(nodeId string) *nodeInfo {
+		for _, p := range rc.Peers {
+			if p.id == nodeId {
+				return &p
+			}
+		}
+		return nil
+	}
+	rc.node.leaderId = getPeerInfo(lId)
+	if rc.node.leaderId == nil {
+		return nil, fmt.Errorf("%s The leaderId is nil!!!\n", clog.CRedRc("AppendEntries"))
+	}
+
+	if err := rc.node.setVotedFor(request.GetLeaderId()); err != nil {
+		log.Printf("%s Error while setting votedFor as leader id: %v\n", clog.CRedNode("AppendEntries"), err)
+		return nil, err
+	}
+
 	log.Printf("%s Send true response back\n", clog.CGreenRc("AppendEntries"))
 	return &raftcomm.AppendEntriesResponse{
 		Term:    lCommit,
@@ -224,31 +243,34 @@ func (rc *RaftCore) buildClient(netAddr string) (raftcomm.RaftCommunicationClien
 	return client, conn, closer, nil
 }
 
-func (rc *RaftCore) voteRequest(netAddr string, term uint32) {
+func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32) {
 	log.Printf("%s Start voteRequest, netAddr: %s, term: %d\n",
 		clog.CGreenRc("voteRequest"), netAddr, term)
 	client, conn, closer, err := rc.buildClient(netAddr)
 	if err != nil {
-		log.Fatalf("[rpcClient] Failed to build grpc client: %v\n", err)
+		log.Fatalf("%s Failed to build grpc client: %v\n", clog.CRedRc("voteRequest"), err)
 	}
 	defer closer(conn)
 
-	for {
+	sendRequest := func() *raftcomm.RequestVoteResponse {
 		log.Printf("%s Sending RequestVote RPC request to %s, lastLogIndex: %d, lastLogTerm: %d\n",
 			clog.CGreenRc("voteRequest"), netAddr, rc.node.lastLogIndex, rc.node.lastLogTerm)
-		ctx, cancel := context.WithTimeout(context.Background(), RPCTimeout)
 		res, err := client.RequestVote(ctx, &raftcomm.RequestVoteRequest{
 			Term:         term,
 			CandidateId:  rc.Info.id,
 			LastLogIndex: rc.node.lastLogIndex,
 			LastLogTerm:  rc.node.lastLogTerm,
 		})
-		cancel()
-
 		if err != nil {
 			log.Printf("%s Failed to receive rpc response: %v\n", clog.CRedRc("voteRequest"), err)
-			time.Sleep(RPCTimeout)
-			continue
+			return nil
+		}
+		return res
+	}
+
+	checkResponse := func(res *raftcomm.RequestVoteResponse) bool {
+		if res == nil {
+			return false
 		}
 
 		rc.mu.Lock()
@@ -281,7 +303,25 @@ func (rc *RaftCore) voteRequest(netAddr string, term uint32) {
 		}
 		log.Printf("%s Done with voteRequest\n", clog.CGreenRc("voteRequest"))
 		rc.mu.Unlock()
+		return true
+	}
+
+	if checkResponse(sendRequest()) {
 		return
+	}
+	ticker := time.NewTicker(RPCTimeout)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if checkResponse(sendRequest()) {
+				return
+			}
+		case <-ctx.Done():
+			log.Printf("%s Already leader, no need to keep sending voteRequest\n", clog.CBlueRc("voteRequest"))
+			return
+		}
 	}
 }
 
@@ -402,13 +442,4 @@ func (rc *RaftCore) heartbeatLoop(ctx context.Context, term uint32) {
 			}
 		}
 	}
-}
-
-func (rc *RaftCore) getPeerInfo(nodeId string) *nodeInfo {
-	for _, p := range rc.Peers {
-		if p.id == nodeId {
-			return &p
-		}
-	}
-	return nil
 }
