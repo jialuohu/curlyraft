@@ -135,20 +135,9 @@ func (rc *RaftCore) becomeLeader(term uint32) {
 	log.Printf("%s Start heartbeatLoop\n", clog.CGreenRc("becomeLeader"))
 	go rc.heartbeatLoop(rc.node.leaderCtx, term)
 	log.Printf("%s Start leader start serving\n", clog.CGreenRc("becomeLeader"))
-	go rc.leaderStartServing(rc.node.leaderCtx)
-}
-
-func (rc *RaftCore) leaderStartServing(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("[leaderStartServing] context done, exiting")
-			return
-		case <-ticker.C:
-			log.Println("[leaderStartServing] Serving...")
+	go func() {
+		if err := rc.leaderStartServing(rc.node.leaderCtx); err != nil {
+			log.Fatalf("%s Leader serving failed\n", clog.CRedRc("becomeLeader"))
 		}
-	}
+	}()
 }

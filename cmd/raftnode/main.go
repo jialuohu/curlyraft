@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"github.com/jialuohu/curlyraft/api"
 	"github.com/jialuohu/curlyraft/config"
 	"log"
+	"os"
+	"os/signal"
 )
 
 type smDummy struct{}
@@ -18,7 +21,7 @@ func main() {
 
 	// 1) Declare flags
 	id := flag.String("id", "", "this node's ID (e.g. nodeA)")
-	listen := flag.String("addr", "", "this node's listen address (e.g. localhost:21001)")
+	listen := flag.String("addr", "", "this node's listen address (e.g. 127.0.0.1:21001)")
 	peersCSV := flag.String("peers", "", "comma-separated peers, each as ID/addr")
 	storage := flag.String("data", "", "local storage directory (e.g. storage/21001)")
 
@@ -43,6 +46,9 @@ func main() {
 	// 5) Instantiate your dummy state machine (or real one!)
 	sm := smDummy{}
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
 	// 6) Create the server
 	log.Println("Server Starting...")
 	rc, err := api.NewServer(cfg, sm)
@@ -51,13 +57,15 @@ func main() {
 	}
 
 	// 7) Run until interrupted
-
 	log.Println("Server running...")
-	if err := api.RunServer(rc); err != nil {
-		log.Fatalf("[%s] RunServer Error: %v\n", cfg.Id, err)
-	}
-	log.Println("Server stopping...")
+	go func() {
+		if err := api.RunServer(rc); err != nil {
+			log.Fatalf("[%s] run server: %v", cfg.Id, err)
+		}
+	}()
 
+	<-ctx.Done()
+	log.Println("Signal received, server shutting down…")
 	if err := api.StopServer(rc); err != nil {
 		log.Fatalf("[%s] StopServer Error: %v", cfg.Id, err)
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/jialuohu/curlyraft/internal/clog"
 	"github.com/jialuohu/curlyraft/internal/persistence"
 	"log"
-	"sync"
 	"time"
 )
 
@@ -18,8 +17,6 @@ type nodeInfo struct {
 }
 
 type node struct {
-	mu sync.Mutex
-
 	// node info
 	state       Role
 	commitIndex uint32
@@ -46,7 +43,6 @@ type node struct {
 
 func newNode(storageDir string, sm curlyraft.StateMachine) *node {
 	n := &node{
-		mu:          sync.Mutex{},
 		state:       Follower,
 		heartbeatCh: make(chan struct{}, 1),
 		stopCh:      make(chan struct{}),
@@ -171,19 +167,39 @@ func (n *node) getLog() ([]*logEntry, error) {
 	return out, nil
 }
 
-func (n *node) appendEntry(entry *logEntry) error {
-	fName := clog.CGreenNode("appendEntry")
-	log.Printf("%s Start append an entry:logTerm=%d,logIndex=%d\n", fName, entry.logTerm, entry.logIndex)
-	logIndex := n.lastLogIndex + 1
-	key, val := logEntryToKeyBytes(entry, n.lastLogIndex)
-	if err := n.storage.Set(key, val); err != nil {
-		log.Printf("[AppendEntry] Failed to store entry into database: %v\n", err)
+func (rc *RaftCore) propose(cmd []byte) error {
+	rc.mu.Lock()
+	log.Printf("%s Start propose cmd into log storage\n", clog.CBlueRc("propose"))
+	curTerm, err := rc.node.getCurrentTerm()
+	if err != nil {
+		log.Printf("%s Failed to get current term\n", clog.CRedRc("propose"))
 		return err
 	}
-	n.lastLogIndex = logIndex
-	log.Printf("%s Also update lastLogTerm\n", fName)
-	if n.lastLogTerm < entry.logTerm {
-		n.lastLogTerm = entry.logTerm
+	if rc.node.lastLogTerm < curTerm {
+		log.Printf("%s Also update lastLogTerm\n", clog.CGreenRc("propose"))
+		rc.node.lastLogTerm = curTerm
+	}
+	if err := rc.node.appendEntry(&logEntry{
+		logTerm:  curTerm,
+		logIndex: rc.node.lastLogIndex + 1,
+		command:  cmd,
+	}); err != nil {
+		log.Printf("%s Failed to append entry into log\n", clog.CRedRc("propose"))
+	}
+	rc.node.lastLogIndex++
+	log.Printf("%s Done with propose. Now lastLogTerm:%d,lastLogIdx:%d\n",
+		clog.CGreenRc("propose"), rc.node.lastLogTerm, rc.node.lastLogIndex)
+	rc.mu.Unlock()
+	return nil
+}
+
+func (n *node) appendEntry(entry *logEntry) error {
+	log.Printf("%s Start append an entry:logTerm=%d,logIndex=%d\n",
+		clog.CGreenNode("appendEntry"), entry.logTerm, entry.logIndex)
+	key, val := logEntryToKeyBytes(entry, n.lastLogIndex)
+	if err := n.storage.Set(key, val); err != nil {
+		log.Printf("%s Failed to store entry into database: %v\n", clog.CRedNode("appendEntry"), err)
+		return err
 	}
 	return nil
 }

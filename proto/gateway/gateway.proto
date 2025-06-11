@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+import "gateway/appendcommand.proto";
+import "gateway/healthcheck.proto";
+
+package gateway;
+
+option go_package="github.com/jialuohu/curlyraft/internal/proto/gateway;gateway";
+
+service RaftGateway {
+  rpc AppendCommand(AppendCommandRequest) returns (AppendCommandResponse);
+}
+
+service HealthCheck {
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+//  rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}
+

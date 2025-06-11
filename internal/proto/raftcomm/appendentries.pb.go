@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v5.29.3
-// source: appendentries.proto
+// source: raftcomm/appendentries.proto
 
 package raftcomm
 
@@ -44,7 +44,7 @@ type AppendEntriesRequest struct {
 
 func (x *AppendEntriesRequest) Reset() {
 	*x = AppendEntriesRequest{}
-	mi := &file_appendentries_proto_msgTypes[0]
+	mi := &file_raftcomm_appendentries_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56,7 +56,7 @@ func (x *AppendEntriesRequest) String() string {
 func (*AppendEntriesRequest) ProtoMessage() {}
 
 func (x *AppendEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_appendentries_proto_msgTypes[0]
+	mi := &file_raftcomm_appendentries_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69,7 +69,7 @@ func (x *AppendEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppendEntriesRequest.ProtoReflect.Descriptor instead.
 func (*AppendEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_appendentries_proto_rawDescGZIP(), []int{0}
+	return file_raftcomm_appendentries_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *AppendEntriesRequest) GetTerm() uint32 {
@@ -128,7 +128,7 @@ type AppendEntriesResponse struct {
 
 func (x *AppendEntriesResponse) Reset() {
 	*x = AppendEntriesResponse{}
-	mi := &file_appendentries_proto_msgTypes[1]
+	mi := &file_raftcomm_appendentries_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -140,7 +140,7 @@ func (x *AppendEntriesResponse) String() string {
 func (*AppendEntriesResponse) ProtoMessage() {}
 
 func (x *AppendEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_appendentries_proto_msgTypes[1]
+	mi := &file_raftcomm_appendentries_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -153,7 +153,7 @@ func (x *AppendEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppendEntriesResponse.ProtoReflect.Descriptor instead.
 func (*AppendEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_appendentries_proto_rawDescGZIP(), []int{1}
+	return file_raftcomm_appendentries_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *AppendEntriesResponse) GetTerm() uint32 {
@@ -181,7 +181,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_appendentries_proto_msgTypes[2]
+	mi := &file_raftcomm_appendentries_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -193,7 +193,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_appendentries_proto_msgTypes[2]
+	mi := &file_raftcomm_appendentries_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -206,7 +206,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_appendentries_proto_rawDescGZIP(), []int{2}
+	return file_raftcomm_appendentries_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LogEntry) GetCommand() []byte {
@@ -230,11 +230,11 @@ func (x *LogEntry) GetLogIndex() uint32 {
 	return 0
 }
 
-var File_appendentries_proto protoreflect.FileDescriptor
+var File_raftcomm_appendentries_proto protoreflect.FileDescriptor
 
-const file_appendentries_proto_rawDesc = "" +
+const file_raftcomm_appendentries_proto_rawDesc = "" +
 	"\n" +
-	"\x13appendentries.proto\x12\braftcomm\"\xde\x01\n" +
+	"\x1craftcomm/appendentries.proto\x12\braftcomm\"\xde\x01\n" +
 	"\x14AppendEntriesRequest\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\rR\x04Term\x12\x1a\n" +
 	"\bLeaderId\x18\x02 \x01(\tR\bLeaderId\x12\"\n" +
@@ -248,27 +248,27 @@ const file_appendentries_proto_rawDesc = "" +
 	"\bLogEntry\x12\x18\n" +
 	"\aCommand\x18\x01 \x01(\fR\aCommand\x12\x18\n" +
 	"\aLogTerm\x18\x02 \x01(\rR\aLogTerm\x12\x1a\n" +
-	"\bLogIndex\x18\x03 \x01(\rR\bLogIndexB\x19Z\x17internal/proto;raftcommb\x06proto3"
+	"\bLogIndex\x18\x03 \x01(\rR\bLogIndexB@Z>github.com/jialuohu/curlyraft/internal/proto/raftcomm;raftcommb\x06proto3"
 
 var (
-	file_appendentries_proto_rawDescOnce sync.Once
-	file_appendentries_proto_rawDescData []byte
+	file_raftcomm_appendentries_proto_rawDescOnce sync.Once
+	file_raftcomm_appendentries_proto_rawDescData []byte
 )
 
-func file_appendentries_proto_rawDescGZIP() []byte {
-	file_appendentries_proto_rawDescOnce.Do(func() {
-		file_appendentries_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_appendentries_proto_rawDesc), len(file_appendentries_proto_rawDesc)))
+func file_raftcomm_appendentries_proto_rawDescGZIP() []byte {
+	file_raftcomm_appendentries_proto_rawDescOnce.Do(func() {
+		file_raftcomm_appendentries_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_raftcomm_appendentries_proto_rawDesc), len(file_raftcomm_appendentries_proto_rawDesc)))
 	})
-	return file_appendentries_proto_rawDescData
+	return file_raftcomm_appendentries_proto_rawDescData
 }
 
-var file_appendentries_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_appendentries_proto_goTypes = []any{
+var file_raftcomm_appendentries_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_raftcomm_appendentries_proto_goTypes = []any{
 	(*AppendEntriesRequest)(nil),  // 0: raftcomm.AppendEntriesRequest
 	(*AppendEntriesResponse)(nil), // 1: raftcomm.AppendEntriesResponse
 	(*LogEntry)(nil),              // 2: raftcomm.LogEntry
 }
-var file_appendentries_proto_depIdxs = []int32{
+var file_raftcomm_appendentries_proto_depIdxs = []int32{
 	2, // 0: raftcomm.AppendEntriesRequest.Entries:type_name -> raftcomm.LogEntry
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
@@ -277,26 +277,26 @@ var file_appendentries_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_appendentries_proto_init() }
-func file_appendentries_proto_init() {
-	if File_appendentries_proto != nil {
+func init() { file_raftcomm_appendentries_proto_init() }
+func file_raftcomm_appendentries_proto_init() {
+	if File_raftcomm_appendentries_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_appendentries_proto_rawDesc), len(file_appendentries_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_raftcomm_appendentries_proto_rawDesc), len(file_raftcomm_appendentries_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_appendentries_proto_goTypes,
-		DependencyIndexes: file_appendentries_proto_depIdxs,
-		MessageInfos:      file_appendentries_proto_msgTypes,
+		GoTypes:           file_raftcomm_appendentries_proto_goTypes,
+		DependencyIndexes: file_raftcomm_appendentries_proto_depIdxs,
+		MessageInfos:      file_raftcomm_appendentries_proto_msgTypes,
 	}.Build()
-	File_appendentries_proto = out.File
-	file_appendentries_proto_goTypes = nil
-	file_appendentries_proto_depIdxs = nil
+	File_raftcomm_appendentries_proto = out.File
+	file_raftcomm_appendentries_proto_goTypes = nil
+	file_raftcomm_appendentries_proto_depIdxs = nil
 }

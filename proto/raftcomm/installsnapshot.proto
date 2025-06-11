@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package raftcomm;
 
-option go_package = "internal/proto;raftcomm";
+option go_package="github.com/jialuohu/curlyraft/internal/proto/raftcomm;raftcomm";
 
 message InstallSnapshotRequest {
   // Leader’s current term.

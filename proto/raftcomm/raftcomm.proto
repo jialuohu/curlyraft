@@ -1,12 +1,13 @@
 syntax = "proto3";
 
-import "appendentries.proto";
-import "requestvote.proto";
-import "installsnapshot.proto";
+import "raftcomm/appendentries.proto";
+import "raftcomm/requestvote.proto";
+import "raftcomm/installsnapshot.proto";
+import "raftcomm/healthcheck.proto";
 
 package raftcomm;
 
-option go_package="internal/proto;raftcomm";
+option go_package="github.com/jialuohu/curlyraft/internal/proto/raftcomm;raftcomm";
 
 service RaftCommunication {
   /// AppendEntries RPC is invoked by the leader to replicate log entries (§5.3)
@@ -55,3 +56,7 @@ service RaftCommunication {
   rpc InstallSnapShot(InstallSnapshotRequest) returns (InstallSnapshotResponse);
 }
 
+service HealthCheck {
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+//  rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}

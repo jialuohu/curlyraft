@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: raftcomm.proto
+// source: raftcomm/raftcomm.proto
 
 package raftcomm
 
@@ -271,5 +271,107 @@ var RaftCommunication_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "raftcomm.proto",
+	Metadata: "raftcomm/raftcomm.proto",
+}
+
+const (
+	HealthCheck_Check_FullMethodName = "/raftcomm.HealthCheck/Check"
+)
+
+// HealthCheckClient is the client API for HealthCheck service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type HealthCheckClient interface {
+	Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
+}
+
+type healthCheckClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewHealthCheckClient(cc grpc.ClientConnInterface) HealthCheckClient {
+	return &healthCheckClient{cc}
+}
+
+func (c *healthCheckClient) Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HealthCheckResponse)
+	err := c.cc.Invoke(ctx, HealthCheck_Check_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// HealthCheckServer is the server API for HealthCheck service.
+// All implementations must embed UnimplementedHealthCheckServer
+// for forward compatibility.
+type HealthCheckServer interface {
+	Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
+	mustEmbedUnimplementedHealthCheckServer()
+}
+
+// UnimplementedHealthCheckServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedHealthCheckServer struct{}
+
+func (UnimplementedHealthCheckServer) Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
+}
+func (UnimplementedHealthCheckServer) mustEmbedUnimplementedHealthCheckServer() {}
+func (UnimplementedHealthCheckServer) testEmbeddedByValue()                     {}
+
+// UnsafeHealthCheckServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to HealthCheckServer will
+// result in compilation errors.
+type UnsafeHealthCheckServer interface {
+	mustEmbedUnimplementedHealthCheckServer()
+}
+
+func RegisterHealthCheckServer(s grpc.ServiceRegistrar, srv HealthCheckServer) {
+	// If the following call pancis, it indicates UnimplementedHealthCheckServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&HealthCheck_ServiceDesc, srv)
+}
+
+func _HealthCheck_Check_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HealthCheckServer).Check(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HealthCheck_Check_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HealthCheckServer).Check(ctx, req.(*HealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// HealthCheck_ServiceDesc is the grpc.ServiceDesc for HealthCheck service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var HealthCheck_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "raftcomm.HealthCheck",
+	HandlerType: (*HealthCheckServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Check",
+			Handler:    _HealthCheck_Check_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "raftcomm/raftcomm.proto",
 }

@@ -17,6 +17,5 @@ func RunServer(rc *core.RaftCore) error {
 }
 
 func StopServer(rc *core.RaftCore) error {
-	rc.Stop()
-	return nil
+	return rc.Stop()
 }

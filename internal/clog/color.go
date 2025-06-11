@@ -25,3 +25,13 @@ var CBlueNode = func(funcName string) string {
 var CGreenNode = func(funcName string) string {
 	return CGreen("[Node/%s]", funcName)
 }
+
+var CRedRg = func(funcName string) string {
+	return CRed("[RaftGateway/%s]", funcName)
+}
+var CBlueRg = func(funcName string) string {
+	return CBlue("[RaftGateway/%s]", funcName)
+}
+var CGreenRg = func(funcName string) string {
+	return CGreen("[RaftGateway/%s]", funcName)
+}

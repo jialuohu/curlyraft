@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/jialuohu/curlyraft/internal/clog"
-	raftcomm "github.com/jialuohu/curlyraft/internal/proto"
+	"github.com/jialuohu/curlyraft/internal/proto/gateway"
+	"github.com/jialuohu/curlyraft/internal/proto/raftcomm"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"log"
+	"net"
+	"os"
 	"time"
 )
 
@@ -226,6 +230,15 @@ func (rc *RaftCore) InstallSnapShot(ctx context.Context, request *raftcomm.Insta
 	panic("implement me")
 }
 
+func (rc *RaftCore) Check(ctx context.Context, request *raftcomm.HealthCheckRequest) (*raftcomm.HealthCheckResponse, error) {
+	service := request.GetService()
+	if service == "run" {
+		return &raftcomm.HealthCheckResponse{Status: raftcomm.HealthCheckResponse_SERVING}, nil
+	} else {
+		return &raftcomm.HealthCheckResponse{Status: raftcomm.HealthCheckResponse_NOT_SERVING}, nil
+	}
+}
+
 func (rc *RaftCore) buildClient(netAddr string) (raftcomm.RaftCommunicationClient, *grpc.ClientConn, func(conn *grpc.ClientConn), error) {
 	log.Printf("%s Start building gRPC client\n", clog.CGreenRc("buildClient"))
 	conn, err := grpc.NewClient(netAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -246,16 +259,18 @@ func (rc *RaftCore) buildClient(netAddr string) (raftcomm.RaftCommunicationClien
 func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32) {
 	log.Printf("%s Start voteRequest, netAddr: %s, term: %d\n",
 		clog.CGreenRc("voteRequest"), netAddr, term)
-	client, conn, closer, err := rc.buildClient(netAddr)
+	ci, err := rc.getHealthyConn(netAddr)
 	if err != nil {
-		log.Fatalf("%s Failed to build grpc client: %v\n", clog.CRedRc("voteRequest"), err)
+		log.Printf("%s Failed to build grpc client: %v\n", clog.CRedRc("voteRequest"), err)
 	}
-	defer closer(conn)
 
-	sendRequest := func() *raftcomm.RequestVoteResponse {
+	sendRequest := func(ci *clientConnInfo) *raftcomm.RequestVoteResponse {
 		log.Printf("%s Sending RequestVote RPC request to %s, lastLogIndex: %d, lastLogTerm: %d\n",
 			clog.CGreenRc("voteRequest"), netAddr, rc.node.lastLogIndex, rc.node.lastLogTerm)
-		res, err := client.RequestVote(ctx, &raftcomm.RequestVoteRequest{
+		if ci == nil {
+			return nil
+		}
+		res, err := ci.client.RequestVote(ctx, &raftcomm.RequestVoteRequest{
 			Term:         term,
 			CandidateId:  rc.Info.id,
 			LastLogIndex: rc.node.lastLogIndex,
@@ -306,7 +321,7 @@ func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32
 		return true
 	}
 
-	if checkResponse(sendRequest()) {
+	if checkResponse(sendRequest(ci)) {
 		return
 	}
 	ticker := time.NewTicker(RPCTimeout)
@@ -315,7 +330,12 @@ func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32
 	for {
 		select {
 		case <-ticker.C:
-			if checkResponse(sendRequest()) {
+			ci, err = rc.getHealthyConn(netAddr)
+			if err != nil {
+				log.Printf("%s Failed to build grpc client: %v\n", clog.CRedRc("voteRequest"), err)
+				continue
+			}
+			if checkResponse(sendRequest(ci)) {
 				return
 			}
 		case <-ctx.Done():
@@ -397,30 +417,49 @@ func (rc *RaftCore) sendHeartbeat(ctx context.Context, client raftcomm.RaftCommu
 	//	clog.CGreenRc("sendHeartbeat"), peer.id, rc.node.nextIndex[peer.id], rc.node.matchIndex[peer.id])
 }
 
-func (rc *RaftCore) heartbeatLoop(ctx context.Context, term uint32) {
-	type clientConnInfo struct {
-		conn   *grpc.ClientConn
-		closer func(conn *grpc.ClientConn)
+func (rc *RaftCore) getHealthyConn(netAddr string) (*clientConnInfo, error) {
+	rc.mu.Lock()
+	ci := rc.peerConns[netAddr]
+	rc.mu.Unlock()
+
+	if ci == nil {
+		client, conn, closer, err := rc.buildClient(netAddr)
+		if err != nil {
+			return nil, fmt.Errorf("cannot build up conn with %s", netAddr)
+		}
+		ci = &clientConnInfo{client: client, conn: conn, closer: closer}
+		rc.mu.Lock()
+		rc.peerConns[netAddr] = ci
+		rc.mu.Unlock()
+		return ci, nil
 	}
 
-	peerConns := make([]clientConnInfo, 0, len(rc.Peers))
+	state := ci.conn.GetState()
+	if state != connectivity.Ready && state != connectivity.Idle {
+		// tear down and rebuild
+		ci.closer(ci.conn)
+		client, conn, closer, err := rc.buildClient(netAddr)
+		if err != nil {
+			return nil, err
+		}
+		ci = &clientConnInfo{client: client, conn: conn, closer: closer}
+		rc.mu.Lock()
+		rc.peerConns[netAddr] = ci
+		rc.mu.Unlock()
+	}
+	return ci, nil
+}
+
+func (rc *RaftCore) heartbeatLoop(ctx context.Context, term uint32) {
 	for _, p := range rc.Peers {
 		log.Printf("%s Start sending heartbeat to %s/%s\n", clog.CGreenRc("heartbeatLoop"), p.id, p.netAddr)
-		client, conn, closer, err := rc.buildClient(p.netAddr)
+		ci, err := rc.getHealthyConn(p.netAddr)
 		if err != nil {
-			log.Fatalf("%s Failed to build grpc client: %v\n", clog.CRedRc("heartbeatLoop"), err)
+			log.Printf("%s Error while performed getHealthyConn, %v\n", clog.CRedRc("heartbeatLoop"), err)
+			continue
 		}
-		peerConns = append(peerConns, clientConnInfo{
-			conn:   conn,
-			closer: closer,
-		})
-		go rc.sendHeartbeat(ctx, client, p, term)
+		go rc.sendHeartbeat(ctx, ci.client, p, term)
 	}
-	defer func(peerConns []clientConnInfo) {
-		for _, c := range peerConns {
-			c.closer(c.conn)
-		}
-	}(peerConns)
 
 	log.Printf("%s Start a new ticker for heartbeat\n", clog.CGreenRc("heartbeatLoop"))
 	ticker := time.NewTicker(HeartbeatInterval)
@@ -436,10 +475,38 @@ func (rc *RaftCore) heartbeatLoop(ctx context.Context, term uint32) {
 		case <-ticker.C:
 			// send actual AppendEntries heartbeats here
 			log.Printf("%s heartbeating…\n", clog.CGreenRc("heartbeatLoop"))
-			for i, p := range rc.Peers {
-				client := raftcomm.NewRaftCommunicationClient(peerConns[i].conn)
-				go rc.sendHeartbeat(ctx, client, p, term)
+			for _, p := range rc.Peers {
+				ci, err := rc.getHealthyConn(p.netAddr)
+				if err != nil {
+					log.Printf("%s Error while performed getHealthyConn, %v\n", clog.CRedRc("heartbeatLoop"), err)
+					continue
+				}
+				go rc.sendHeartbeat(ctx, ci.client, p, term)
 			}
 		}
 	}
+}
+
+func (rc *RaftCore) leaderStartServing(ctx context.Context) error {
+	socketPath := "/tmp/raft.sock"
+	if err := os.RemoveAll(socketPath); err != nil {
+		log.Printf("[leaderServing] warning removing stale socket: %v", err)
+	}
+
+	log.Printf("%s Leader start serving \n", clog.CGreenRc("leaderServing"))
+	lis, err := net.Listen("unix", socketPath)
+	if err != nil {
+		log.Printf("%s Error while creating listener on /tmp/raft.sock:%v\n", clog.CRedRc("leaderStartServing"), err)
+		return err
+	}
+	grpcServer := grpc.NewServer()
+	rc.rg = NewRaftGateway(rc, grpcServer)
+	gateway.RegisterRaftGatewayServer(grpcServer, rc.rg)
+	gateway.RegisterHealthCheckServer(grpcServer, rc.rg)
+	go func(ctx context.Context) {
+		<-ctx.Done()
+		log.Printf("%s Leader gateway gracefully stops\n", clog.CGreenRc("leaderServing"))
+		grpcServer.GracefulStop()
+	}(ctx)
+	return grpcServer.Serve(lis)
 }

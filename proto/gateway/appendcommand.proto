@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package gateway;
+
+option go_package="github.com/jialuohu/curlyraft/internal/proto/gateway;gateway";
+
+
+message AppendCommandRequest {
+  bytes Command = 1;
+}
+
+message AppendCommandResponse {
+  bool Applied = 1;
+}

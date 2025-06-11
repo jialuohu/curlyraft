@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v5.29.3
-// source: installsnapshot.proto
+// source: raftcomm/installsnapshot.proto
 
 package raftcomm
 
@@ -43,7 +43,7 @@ type InstallSnapshotRequest struct {
 
 func (x *InstallSnapshotRequest) Reset() {
 	*x = InstallSnapshotRequest{}
-	mi := &file_installsnapshot_proto_msgTypes[0]
+	mi := &file_raftcomm_installsnapshot_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55,7 +55,7 @@ func (x *InstallSnapshotRequest) String() string {
 func (*InstallSnapshotRequest) ProtoMessage() {}
 
 func (x *InstallSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_installsnapshot_proto_msgTypes[0]
+	mi := &file_raftcomm_installsnapshot_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68,7 +68,7 @@ func (x *InstallSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstallSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*InstallSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_installsnapshot_proto_rawDescGZIP(), []int{0}
+	return file_raftcomm_installsnapshot_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *InstallSnapshotRequest) GetTerm() uint32 {
@@ -130,7 +130,7 @@ type InstallSnapshotResponse struct {
 
 func (x *InstallSnapshotResponse) Reset() {
 	*x = InstallSnapshotResponse{}
-	mi := &file_installsnapshot_proto_msgTypes[1]
+	mi := &file_raftcomm_installsnapshot_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -142,7 +142,7 @@ func (x *InstallSnapshotResponse) String() string {
 func (*InstallSnapshotResponse) ProtoMessage() {}
 
 func (x *InstallSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_installsnapshot_proto_msgTypes[1]
+	mi := &file_raftcomm_installsnapshot_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -155,7 +155,7 @@ func (x *InstallSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstallSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*InstallSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_installsnapshot_proto_rawDescGZIP(), []int{1}
+	return file_raftcomm_installsnapshot_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *InstallSnapshotResponse) GetTerm() uint32 {
@@ -165,11 +165,11 @@ func (x *InstallSnapshotResponse) GetTerm() uint32 {
 	return 0
 }
 
-var File_installsnapshot_proto protoreflect.FileDescriptor
+var File_raftcomm_installsnapshot_proto protoreflect.FileDescriptor
 
-const file_installsnapshot_proto_rawDesc = "" +
+const file_raftcomm_installsnapshot_proto_rawDesc = "" +
 	"\n" +
-	"\x15installsnapshot.proto\x12\braftcomm\"\xe2\x01\n" +
+	"\x1eraftcomm/installsnapshot.proto\x12\braftcomm\"\xe2\x01\n" +
 	"\x16InstallSnapshotRequest\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\rR\x04Term\x12\x1a\n" +
 	"\bLeaderId\x18\x02 \x01(\tR\bLeaderId\x12,\n" +
@@ -179,26 +179,26 @@ const file_installsnapshot_proto_rawDesc = "" +
 	"\x04Data\x18\x06 \x01(\fR\x04Data\x12\x12\n" +
 	"\x04Done\x18\a \x01(\bR\x04Done\"-\n" +
 	"\x17InstallSnapshotResponse\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\rR\x04TermB\x19Z\x17internal/proto;raftcommb\x06proto3"
+	"\x04Term\x18\x01 \x01(\rR\x04TermB@Z>github.com/jialuohu/curlyraft/internal/proto/raftcomm;raftcommb\x06proto3"
 
 var (
-	file_installsnapshot_proto_rawDescOnce sync.Once
-	file_installsnapshot_proto_rawDescData []byte
+	file_raftcomm_installsnapshot_proto_rawDescOnce sync.Once
+	file_raftcomm_installsnapshot_proto_rawDescData []byte
 )
 
-func file_installsnapshot_proto_rawDescGZIP() []byte {
-	file_installsnapshot_proto_rawDescOnce.Do(func() {
-		file_installsnapshot_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_installsnapshot_proto_rawDesc), len(file_installsnapshot_proto_rawDesc)))
+func file_raftcomm_installsnapshot_proto_rawDescGZIP() []byte {
+	file_raftcomm_installsnapshot_proto_rawDescOnce.Do(func() {
+		file_raftcomm_installsnapshot_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_raftcomm_installsnapshot_proto_rawDesc), len(file_raftcomm_installsnapshot_proto_rawDesc)))
 	})
-	return file_installsnapshot_proto_rawDescData
+	return file_raftcomm_installsnapshot_proto_rawDescData
 }
 
-var file_installsnapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_installsnapshot_proto_goTypes = []any{
+var file_raftcomm_installsnapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_raftcomm_installsnapshot_proto_goTypes = []any{
 	(*InstallSnapshotRequest)(nil),  // 0: raftcomm.InstallSnapshotRequest
 	(*InstallSnapshotResponse)(nil), // 1: raftcomm.InstallSnapshotResponse
 }
-var file_installsnapshot_proto_depIdxs = []int32{
+var file_raftcomm_installsnapshot_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
 	0, // [0:0] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -206,26 +206,26 @@ var file_installsnapshot_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_installsnapshot_proto_init() }
-func file_installsnapshot_proto_init() {
-	if File_installsnapshot_proto != nil {
+func init() { file_raftcomm_installsnapshot_proto_init() }
+func file_raftcomm_installsnapshot_proto_init() {
+	if File_raftcomm_installsnapshot_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_installsnapshot_proto_rawDesc), len(file_installsnapshot_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_raftcomm_installsnapshot_proto_rawDesc), len(file_raftcomm_installsnapshot_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_installsnapshot_proto_goTypes,
-		DependencyIndexes: file_installsnapshot_proto_depIdxs,
-		MessageInfos:      file_installsnapshot_proto_msgTypes,
+		GoTypes:           file_raftcomm_installsnapshot_proto_goTypes,
+		DependencyIndexes: file_raftcomm_installsnapshot_proto_depIdxs,
+		MessageInfos:      file_raftcomm_installsnapshot_proto_msgTypes,
 	}.Build()
-	File_installsnapshot_proto = out.File
-	file_installsnapshot_proto_goTypes = nil
-	file_installsnapshot_proto_depIdxs = nil
+	File_raftcomm_installsnapshot_proto = out.File
+	file_raftcomm_installsnapshot_proto_goTypes = nil
+	file_raftcomm_installsnapshot_proto_depIdxs = nil
 }
