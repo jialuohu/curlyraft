@@ -10,10 +10,8 @@ import (
 
 const (
 	TimeoutLowerBound = 150 * time.Millisecond
-	//TimeoutLowerBound = 5 * time.Second
 
 	TimeoutRange = 150 * time.Millisecond
-	//TimeoutRange = 5 * time.Second
 )
 
 func (rc *RaftCore) roleLoop() error {
@@ -72,8 +70,10 @@ func (n *node) tickHeartbeat() {
 }
 
 func (rc *RaftCore) startElection() error {
-	log.Printf("%s Start election\n", clog.CGreenRc("startElection"))
 	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	log.Printf("%s Start election\n", clog.CGreenRc("startElection"))
 	log.Printf("%s Get current node term\n", clog.CGreenRc("startElection"))
 	curTerm, err := rc.node.getCurrentTerm()
 	if err != nil {
@@ -85,32 +85,43 @@ func (rc *RaftCore) startElection() error {
 	}
 	log.Printf("%s Set current node term: %d, newTerm: %d\n", clog.CGreenRc("startElection"), curTerm, newTerm)
 
-	if rc.node.state == Follower {
-		log.Printf("%s Current node state is Follower will become Candidate\n", clog.CGreenRc("startElection"))
+	//if rc.node.state == Follower {
+	//	log.Printf("%s Current node state is Follower will become Candidate\n", clog.CGreenRc("startElection"))
+	//	rc.node.state = Candidate
+	//	rc.receivedVotes = 1
+	//	log.Printf("%s Start sending voteRequest to its peers\n", clog.CGreenRc("startElection"))
+	//	rc.node.leaderBecomeCtx, rc.node.leaderBecomeCancel = context.WithCancel(context.Background())
+	//	for _, peer := range rc.Peers {
+	//		go rc.voteRequest(rc.node.leaderBecomeCtx, peer.netAddr, newTerm)
+	//	}
+	//	log.Printf("%s Done with sending\n", clog.CGreenRc("startElection"))
+	//} else if rc.node.state == Candidate {
+	//	log.Printf("%s Current node state is Candidate\n", clog.CGreenRc("startElection"))
+	//	rc.receivedVotes = 1 // empty previous term votes + vote itself
+	//	log.Printf("%s Start sending voteRequest to its peers\n", clog.CGreenRc("startElection"))
+	//	rc.node.leaderBecomeCtx, rc.node.leaderBecomeCancel = context.WithCancel(context.Background())
+	//	for _, peer := range rc.Peers {
+	//		go rc.voteRequest(rc.node.leaderBecomeCtx, peer.netAddr, newTerm)
+	//	}
+	//}
+
+	if rc.node.state != Leader {
+		log.Printf("%s Current node state is %s will become Candidate\n",
+			clog.CGreenRc("startElection"), rc.node.state)
 		rc.node.state = Candidate
-		rc.receivedVotes++
+		rc.receivedVotes = 1
+		log.Printf("%s Node votedFor itself!!!\n", clog.CBlueRc("startElection"))
+		if err := rc.node.setVotedFor(rc.Info.id); err != nil {
+			log.Printf("%s Failed to set votedFor\n", clog.CRedRc("startElection"))
+		}
 		log.Printf("%s Start sending voteRequest to its peers\n", clog.CGreenRc("startElection"))
+		rc.node.leaderBecomeCtx, rc.node.leaderBecomeCancel = context.WithCancel(context.Background())
 		for _, peer := range rc.Peers {
-			rc.node.leaderBecomeCtx, rc.node.leaderBecomeCancel = context.WithCancel(context.Background())
-			go rc.voteRequest(rc.node.leaderBecomeCtx, peer.netAddr, newTerm)
+			go rc.voteRequest(rc.node.leaderBecomeCtx, peer.netAddr)
 		}
 		log.Printf("%s Done with sending\n", clog.CGreenRc("startElection"))
-	} else if rc.node.state == Candidate {
-		log.Printf("%s Current node state is Candidate\n", clog.CGreenRc("startElection"))
-		rc.receivedVotes = 1 // empty previous term votes + vote itself
-		log.Printf("%s Start sending voteRequest to its peers\n", clog.CGreenRc("startElection"))
-		for _, peer := range rc.Peers {
-			rc.node.leaderBecomeCtx, rc.node.leaderBecomeCancel = context.WithCancel(context.Background())
-			go rc.voteRequest(rc.node.leaderBecomeCtx, peer.netAddr, newTerm)
-		}
 	}
 
-	log.Printf("%s Node votedFor itself!!!\n", clog.CBlueRc("startElection"))
-	if err := rc.node.setVotedFor(rc.Info.id); err != nil {
-		log.Printf("%s Failed to set votedFor\n", clog.CRedRc("startElection"))
-	}
-
-	rc.mu.Unlock()
 	return nil
 }
 
@@ -123,6 +134,7 @@ func (rc *RaftCore) becomeLeader(term uint32) {
 
 	rc.node.nextIndex = make(map[string]uint32, size)
 	rc.node.matchIndex = make(map[string]uint32, size)
+
 	for _, p := range rc.Peers {
 		rc.node.nextIndex[p.id] = rc.node.lastLogIndex + 1
 		rc.node.matchIndex[p.id] = 0
@@ -140,4 +152,19 @@ func (rc *RaftCore) becomeLeader(term uint32) {
 			log.Fatalf("%s Leader serving failed\n", clog.CRedRc("becomeLeader"))
 		}
 	}()
+}
+
+func (rc *RaftCore) leaderStepdown(nodeTerm uint32) error {
+	rc.mu.Lock()
+	rc.node.leaderCancel()
+	rc.node.state = Follower
+	rc.node.matchIndex = nil
+	rc.node.nextIndex = nil
+	rc.mu.Unlock()
+
+	if err := rc.node.setCurrentTerm(nodeTerm); err != nil {
+		log.Printf("%s Failed to set current term to peer's: %v\n", clog.CRedRc("leaderStepdown"), err)
+		return err
+	}
+	return nil
 }

@@ -10,17 +10,16 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"log"
+	"math"
 	"net"
 	"os"
 	"time"
 )
 
 const (
-	RPCTimeout = time.Millisecond * 100
-	//RPCTimeout = time.Second * 10
+	RPCTimeout = time.Millisecond * 50
 
-	HeartbeatInterval = time.Millisecond * 20
-	//HeartbeatInterval = time.Second * 1
+	HeartbeatInterval = time.Millisecond * 80
 )
 
 func (rc *RaftCore) AppendEntries(ctx context.Context, request *raftcomm.AppendEntriesRequest) (*raftcomm.AppendEntriesResponse, error) {
@@ -111,7 +110,7 @@ func (rc *RaftCore) AppendEntries(ctx context.Context, request *raftcomm.AppendE
 		}
 
 		log.Printf("%s Setup cur node's lastLogIndex/Term\n", clog.CGreenRc("AppendEntries"))
-		rc.node.lastLogIndex = lPrevIndex
+		rc.node.lastLogIndex = lPrevIndex + uint32(len(lEntries))
 		rc.node.lastLogTerm = lPrevTerm
 	}
 
@@ -149,7 +148,7 @@ func (rc *RaftCore) AppendEntries(ctx context.Context, request *raftcomm.AppendE
 
 	log.Printf("%s Send true response back\n", clog.CGreenRc("AppendEntries"))
 	return &raftcomm.AppendEntriesResponse{
-		Term:    lCommit,
+		Term:    lTerm,
 		Success: true,
 	}, nil
 }
@@ -256,9 +255,9 @@ func (rc *RaftCore) buildClient(netAddr string) (raftcomm.RaftCommunicationClien
 	return client, conn, closer, nil
 }
 
-func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32) {
-	log.Printf("%s Start voteRequest, netAddr: %s, term: %d\n",
-		clog.CGreenRc("voteRequest"), netAddr, term)
+func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string) {
+	log.Printf("%s Start voteRequest, netAddr: %s\n",
+		clog.CGreenRc("voteRequest"), netAddr)
 	ci, err := rc.getHealthyConn(netAddr)
 	if err != nil {
 		log.Printf("%s Failed to build grpc client: %v\n", clog.CRedRc("voteRequest"), err)
@@ -270,11 +269,19 @@ func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32
 		if ci == nil {
 			return nil
 		}
+		rc.mu.Lock()
+		curTerm, err := rc.node.getCurrentTerm()
+		if err != nil {
+			log.Fatalf("%s Failed to get current term: %v\n", clog.CRedRc("voteRequest"), err)
+		}
+		lastLogIndex := rc.node.lastLogIndex
+		lastLogTerm := rc.node.lastLogTerm
+		rc.mu.Unlock()
 		res, err := ci.client.RequestVote(ctx, &raftcomm.RequestVoteRequest{
-			Term:         term,
+			Term:         curTerm,
 			CandidateId:  rc.Info.id,
-			LastLogIndex: rc.node.lastLogIndex,
-			LastLogTerm:  rc.node.lastLogTerm,
+			LastLogIndex: lastLogIndex,
+			LastLogTerm:  lastLogTerm,
 		})
 		if err != nil {
 			log.Printf("%s Failed to receive rpc response: %v\n", clog.CRedRc("voteRequest"), err)
@@ -289,11 +296,15 @@ func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32
 		}
 
 		rc.mu.Lock()
+		curTerm, err := rc.node.getCurrentTerm()
+		if err != nil {
+			log.Fatalf("%s Failed to get current term: %v\n", clog.CRedRc("voteRequest"), err)
+		}
 		log.Printf("%s Checking response from other node: %s\n",
 			clog.CGreenRc("voteRequest"), netAddr)
-		if res.GetTerm() > term {
+		if res.GetTerm() > curTerm {
 			log.Printf("%s peer node term: %d > cur term: %d\n",
-				clog.CGreenRc("voteRequest"), res.GetTerm(), term)
+				clog.CGreenRc("voteRequest"), res.GetTerm(), curTerm)
 			if err := rc.node.setCurrentTerm(res.GetTerm()); err != nil {
 				rc.mu.Unlock()
 				log.Fatalf("%s Failed to set new term: %v\n", clog.CRedRc("voteRequest"), err)
@@ -302,7 +313,7 @@ func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32
 				clog.CGreenRc("voteRequest"))
 		} else {
 			log.Printf("%s peer node term: %d <= cur term: %d\n",
-				clog.CGreenRc("voteRequest"), res.GetTerm(), term)
+				clog.CGreenRc("voteRequest"), res.GetTerm(), curTerm)
 			if res.GetVoteGranted() {
 				log.Printf("%s Got one vote from peer!\n", clog.CGreenRc("voteRequest"))
 				rc.receivedVotes++
@@ -310,7 +321,7 @@ func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32
 				if rc.receivedVotes >= rc.quorumSize && rc.node.state == Candidate {
 					log.Printf("%s Have enough votes: %d! Gonna become leader!\n",
 						clog.CBlueRc("voteRequest"), rc.receivedVotes)
-					rc.becomeLeader(term)
+					rc.becomeLeader(curTerm)
 				}
 			} else {
 				log.Printf("%s Didn't get vote from peer\n", clog.CGreenRc("voteRequest"))
@@ -346,31 +357,24 @@ func (rc *RaftCore) voteRequest(ctx context.Context, netAddr string, term uint32
 }
 
 func (rc *RaftCore) sendHeartbeat(ctx context.Context, client raftcomm.RaftCommunicationClient, peer nodeInfo, term uint32) {
-
 	rc.mu.Lock()
-	// since heartbeat just send nothing
-	//prevLogIndex := rc.node.nextIndex[peer.id] - 1
-	//prevLogTerm, ok := rc.node.getLogTerm(prevLogIndex)
-
-	prevLogIndex := rc.node.lastLogIndex
-	prevLogTerm := rc.node.lastLogTerm
-
-	//if !ok {
-	//	log.Fatalf("%s Failed to get log term based on idx:%d.\n",
-	//		clog.CRedRc("sendHeartbeat"), prevLogIndex)
-	//}
-
+	prevLogIndex := rc.node.nextIndex[peer.id] - 1
+	prevLogTerm, found := rc.node.getLogTerm(prevLogIndex)
+	if !found {
+		log.Fatalf("%s Failed to get term based on prevLogIndex:%d\n",
+			clog.CRedRc("sendHeartbeat"), prevLogIndex)
+	}
 	commitIndex := rc.node.commitIndex
 	log.Printf("%s prevLogIndex: %d, prevLogTerm: %d, commitIdx: %d\n",
 		clog.CGreenRc("sendHeartbeat"), prevLogIndex, prevLogTerm, commitIndex)
 	rc.mu.Unlock()
 
-	rpcCtx, cancel := context.WithTimeout(ctx, RPCTimeout)
-	defer cancel()
+	//rpcCtx, cancel := context.WithTimeout(ctx, RPCTimeout)
+	//defer cancel()
 
 	log.Printf("%s Send AppendEntries RPC request (heartbeat) to %s\n",
 		clog.CGreenRc("sendHeartbeat"), peer.id)
-	res, err := client.AppendEntries(rpcCtx, &raftcomm.AppendEntriesRequest{
+	res, err := client.AppendEntries(ctx, &raftcomm.AppendEntriesRequest{
 		Term:         term,
 		LeaderId:     rc.Info.id,
 		PrevLogIndex: prevLogIndex,
@@ -390,12 +394,8 @@ func (rc *RaftCore) sendHeartbeat(ctx context.Context, client raftcomm.RaftCommu
 	nodeTerm := res.GetTerm()
 	if nodeTerm > term {
 		log.Printf("%s saw higher term %d > %d, stepping down", clog.CGreenRc("sendHeartbeat"), nodeTerm, term)
-		rc.node.leaderCancel()
-		rc.node.state = Follower
-		rc.node.matchIndex = nil
-		rc.node.nextIndex = nil
-		if err := rc.node.setCurrentTerm(nodeTerm); err != nil {
-			log.Printf("%s Failed to set current term to peer's\n", clog.CGreenRc("sendHeartbeat"))
+		if err := rc.leaderStepdown(nodeTerm); err != nil {
+			log.Printf("%s Failed to stepdown leader: %v\n", clog.CRedRc("sendHeartbeat"), err)
 		}
 		return
 	}
@@ -403,18 +403,15 @@ func (rc *RaftCore) sendHeartbeat(ctx context.Context, client raftcomm.RaftCommu
 	isSuccess := res.GetSuccess()
 	if isSuccess {
 		// follower accepted
-		log.Printf("%s peer %s accepted heartbeat\n", clog.CGreenRc("sendHeartbeat"), peer.id)
-		//rc.node.nextIndex[peer.id] = prevLogIndex + 1
-		//rc.node.matchIndex[peer.id] = prevLogIndex
+		rc.node.matchIndex[peer.id] = prevLogIndex
+		log.Printf("%s peer %s accepted heartbeat, matchIndex: %d\n",
+			clog.CGreenRc("sendHeartbeat"), peer.id, rc.node.matchIndex[peer.id])
 	} else {
 		// follower rejected
-		log.Printf("%s peer %s rejected heartbeat\n", clog.CGreenRc("sendHeartbeat"), peer.id)
-		//if rc.node.nextIndex[peer.id] > 1 {
-		//	rc.node.nextIndex[peer.id]--
-		//}
+		rc.node.nextIndex[peer.id]--
+		log.Printf("%s peer %s rejected heartbeat, nextIndex--:%d\n",
+			clog.CGreenRc("sendHeartbeat"), peer.id, rc.node.nextIndex[peer.id])
 	}
-	//log.Printf("%s nextIndex, matchIndex for peer %s: %d, %d\n",
-	//	clog.CGreenRc("sendHeartbeat"), peer.id, rc.node.nextIndex[peer.id], rc.node.matchIndex[peer.id])
 }
 
 func (rc *RaftCore) getHealthyConn(netAddr string) (*clientConnInfo, error) {
@@ -500,13 +497,188 @@ func (rc *RaftCore) leaderStartServing(ctx context.Context) error {
 		return err
 	}
 	grpcServer := grpc.NewServer()
+	rc.mu.Lock()
 	rc.rg = NewRaftGateway(rc, grpcServer)
+	rc.mu.Unlock()
+
 	gateway.RegisterRaftGatewayServer(grpcServer, rc.rg)
 	gateway.RegisterHealthCheckServer(grpcServer, rc.rg)
 	go func(ctx context.Context) {
 		<-ctx.Done()
 		log.Printf("%s Leader gateway gracefully stops\n", clog.CGreenRc("leaderServing"))
-		grpcServer.GracefulStop()
+		rc.rg.stop()
 	}(ctx)
 	return grpcServer.Serve(lis)
+}
+
+func (rc *RaftCore) entriesSend(ctx context.Context, ci *clientConnInfo, p nodeInfo) (uint32, bool, uint32) {
+	log.Printf("%s Start sending entries\n", clog.CBlueRc("entriesSend"))
+	rc.mu.Lock()
+	leaderId := rc.Info.id
+	prevLogIndex := rc.node.nextIndex[p.id] - 1
+	leaderCommit := rc.node.commitIndex
+	log.Printf("%s leaderId:%s, nextIdx[peer]:%d, prevLogIndex:%d, leaderCommit:%d\n",
+		clog.CBlueRc("entriesSend"), leaderId, rc.node.nextIndex[p.id], prevLogIndex, leaderCommit)
+	rc.mu.Unlock()
+	prevLogTerm, found := rc.node.getLogTerm(prevLogIndex)
+	if !found {
+		log.Fatalf("%s Failed to get term based on index:%d\n",
+			clog.CRedRc("entriesSend"), prevLogIndex)
+	}
+	curTerm, err := rc.node.getCurrentTerm()
+	if err != nil {
+		log.Fatalf("%s Failed to get current term\n", clog.CRedRc("entriesSend"))
+	}
+	logEntries, err := rc.node.getLog()
+	if err != nil {
+		log.Fatalf("%s Failed to get log list\n", clog.CRedRc("entriesSend"))
+	}
+
+	entries := make([]*raftcomm.LogEntry, 0, len(logEntries))
+	for _, e := range logEntries[prevLogIndex+1:] {
+		entries = append(entries, &raftcomm.LogEntry{
+			Command:  e.command,
+			LogTerm:  e.logTerm,
+			LogIndex: e.logIndex,
+		})
+	}
+	log.Printf("%s len(entries):%d, len(logEntries):%d, entries: %v\n",
+		clog.CBlueRc("entriesSend"), len(entries), len(logEntries), entries)
+
+	log.Printf("%s Prepared done, now start sending RPC request\n", clog.CBlueRc("entriesSend"))
+	res, err := ci.client.AppendEntries(ctx, &raftcomm.AppendEntriesRequest{
+		Term:         curTerm,
+		LeaderId:     leaderId,
+		PrevLogIndex: prevLogIndex,
+		PrevLogTerm:  prevLogTerm,
+		LeaderCommit: leaderCommit,
+		Entries:      entries,
+	})
+	if err != nil {
+		log.Printf("%s Failed to get response from follower %s/%s: %v\n",
+			clog.CRedRc("entriesSend"), p.id, p.netAddr, err)
+	}
+	if res != nil {
+		log.Printf("%s Got RPC response successfully\n", clog.CBlueRc("entriesSend"))
+		return res.GetTerm(), res.GetSuccess(), uint32(len(entries))
+	}
+	return 0, false, 0
+}
+
+func (rc *RaftCore) bCastEntriesToPeers(ctx context.Context) {
+	responseProcess := func(p nodeInfo, fTerm uint32, success bool, numEntries uint32) bool {
+		if success {
+			log.Printf("%s Appended entries into follower successfully, fTerm:%d\n",
+				clog.CGreenRc("bCastEntriesToPeers"), fTerm)
+			rc.mu.Lock()
+			log.Printf("%s Append successfully, updating matchIndex:%d=nextIndex-1...\n",
+				clog.CBlueRc("bCastEntriesToPeers"), rc.node.nextIndex[p.id]-1)
+			rc.node.nextIndex[p.id] += numEntries
+			rc.node.matchIndex[p.id] += numEntries
+			log.Printf("%s Now matchIndex:%d, nextIndex:%d\n",
+				clog.CBlueRc("bCastEntriesToPeers"), rc.node.matchIndex[p.id], rc.node.nextIndex[p.id])
+			rc.mu.Unlock()
+			return true
+		} else {
+			log.Printf("%s Appending failed\n", clog.CGreenRc("entriesSend"))
+			curTerm, err := rc.node.getCurrentTerm()
+			if err != nil {
+				log.Printf("%s Failed to get current term\n", clog.CRedRc("bCastEntriesToPeers"))
+				return false
+			}
+			if curTerm < fTerm {
+				log.Printf("%s saw higher term %d > %d, stepping down",
+					clog.CGreenRc("bCastEntriesToPeers"), fTerm, curTerm)
+				if err = rc.leaderStepdown(fTerm); err != nil {
+					log.Printf("%s Failed to make leader stepdown\n", clog.CRedRc("bCastEntriesToPeers"))
+				}
+			} else {
+				rc.mu.Lock()
+				log.Printf("%s Append failed, nextIdx--:%d\n",
+					clog.CGreenRc("bCastEntriesToPeers"), rc.node.nextIndex[p.id]-1)
+				rc.node.nextIndex[p.id]--
+				rc.mu.Unlock()
+			}
+			return false
+		}
+	}
+
+	rpcRetransmit := func(ci *clientConnInfo, p nodeInfo) {
+		fTerm, success, numEntries := rc.entriesSend(ctx, ci, p)
+		if responseProcess(p, fTerm, success, numEntries) {
+			return
+		}
+		t := time.NewTicker(RPCTimeout)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				log.Printf("%s Timeout! Resend RPC request to follower %s/%s\n",
+					clog.CBlueRc("bCastEntriesToPeers"), p.id, p.netAddr)
+				fTerm, success, numEntries = rc.entriesSend(ctx, ci, p)
+				if responseProcess(p, fTerm, success, numEntries) {
+					return
+				}
+			case <-ctx.Done():
+				log.Printf("%s Leader stepping down, no need to send AppendEntries RPC request\n",
+					clog.CBlueRc("bCastEntriesToPeers"))
+				return
+			}
+		}
+	}
+
+	for _, p := range rc.Peers {
+		log.Printf("%s Start sending entries to %s/%s\n",
+			clog.CGreenRc("bCastEntriesToPeers"), p.id, p.netAddr)
+		ci, err := rc.getHealthyConn(p.netAddr)
+		if err != nil {
+			log.Printf("%s Error while performed getHealthyConn, %v\n", clog.CRedRc("bCastEntriesToPeers"), err)
+			continue
+		}
+
+		go rpcRetransmit(ci, p)
+	}
+}
+
+func (rc *RaftCore) updateCommitIndex() {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	minIdx := uint32(math.MaxUint32)
+	for _, v := range rc.node.matchIndex {
+		if v < minIdx {
+			minIdx = v
+		}
+	}
+	rc.node.commitIndex = minIdx
+}
+
+func (rc *RaftCore) propose(cmd []byte) error {
+	rc.mu.Lock()
+	log.Printf("%s Start propose cmd into log storage\n", clog.CBlueRc("propose"))
+	curTerm, err := rc.node.getCurrentTerm()
+	if err != nil {
+		log.Printf("%s Failed to get current term\n", clog.CRedRc("propose"))
+		return err
+	}
+	if rc.node.lastLogTerm < curTerm {
+		log.Printf("%s Also update lastLogTerm\n", clog.CGreenRc("propose"))
+		rc.node.lastLogTerm = curTerm
+	}
+	le := &logEntry{
+		logTerm:  rc.node.lastLogTerm,
+		logIndex: rc.node.lastLogIndex + 1,
+		command:  cmd,
+	}
+	if err := rc.node.appendEntry(le); err != nil {
+		log.Printf("%s Failed to append entry into log\n", clog.CRedRc("propose"))
+	}
+	rc.node.lastLogIndex++
+	log.Printf("%s Done with propose. Now lastLogTerm:%d,lastLogIdx:%d\n",
+		clog.CGreenRc("propose"), rc.node.lastLogTerm, rc.node.lastLogIndex)
+	rc.mu.Unlock()
+
+	rc.bCastEntriesToPeers(rc.node.leaderCtx)
+	rc.updateCommitIndex()
+	rc.node.applyEntries()
+	return nil
 }

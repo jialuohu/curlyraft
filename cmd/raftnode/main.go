@@ -12,9 +12,12 @@ import (
 
 type smDummy struct{}
 
-func (s smDummy) Apply(command []byte) ([]byte, error) { panic("TODO") }
-func (s smDummy) Snapshot() ([]byte, error)            { panic("TODO") }
-func (s smDummy) Restore(snapshot []byte) error        { panic("TODO") }
+func (s smDummy) Apply(command []byte) ([]byte, error) {
+	log.Printf("[StateMachine] I got command: %s!!!!!!!!!!!!!!!!!!!\n", string(command))
+	return []byte(""), nil
+}
+func (s smDummy) Snapshot() ([]byte, error)     { panic("TODO") }
+func (s smDummy) Restore(snapshot []byte) error { panic("TODO") }
 
 func main() {
 	//var c = color.New(color.FgCyan).Add(color.Bold)

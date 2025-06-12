@@ -20,7 +20,7 @@ func NewRaftGateway(rc *RaftCore, grpcServer *grpc.Server) *RaftGateway {
 
 func (rg *RaftGateway) stop() {
 	if rg.grpcServer != nil {
-		rg.grpcServer.GracefulStop()
+		rg.grpcServer.Stop()
 	}
 	log.Printf("%s Stopped raft gateway gRPC server\n", clog.CGreenRg("stop"))
 }

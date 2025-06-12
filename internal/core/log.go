@@ -13,13 +13,18 @@ type logEntry struct {
 
 type Log []logEntry
 
-func bytesToLogEntry(raw []byte) (*logEntry, error) {
-	if len(raw) < 8 {
-		return nil, fmt.Errorf("Need at least 8 bytes: term (4 Bytes) and index (4 Bytes)\n")
+var dummyLogEntry = logEntry{
+	logTerm:  0,
+	logIndex: 0,
+	command:  nil,
+}
+
+func bytesToLogEntry(raw []byte, logIndex uint32) (*logEntry, error) {
+	if len(raw) < 4 {
+		return nil, fmt.Errorf("Need at least 4 bytes: term (4 Bytes) but only has %d\n", len(raw))
 	}
 	logTerm := binary.BigEndian.Uint32(raw[:4])
-	logIndex := binary.BigEndian.Uint32(raw[4:8])
-	command := raw[8:]
+	command := raw[4:]
 	return &logEntry{
 		logTerm:  logTerm,
 		logIndex: logIndex,
@@ -27,17 +32,13 @@ func bytesToLogEntry(raw []byte) (*logEntry, error) {
 	}, nil
 }
 
-func logEntryToKeyBytes(entry *logEntry, lastLogIndex uint32) ([]byte, []byte) {
-	command := entry.command
-	buf := make([]byte, 8+len(command))
-	binary.BigEndian.PutUint32(buf[:4], entry.logTerm)
-	binary.BigEndian.PutUint32(buf[4:8], entry.logIndex)
-	copy(buf[8:], command)
-
-	key := make([]byte, len(LogPrefix)+8)
-	copy(key, LogPrefix)
-	binary.BigEndian.AppendUint32(key, lastLogIndex)
-	return key, buf
+func marshalEntry(entry *logEntry) []byte {
+	cmd := entry.command
+	term := entry.logTerm
+	buf := make([]byte, len(LogPrefix)+len(cmd))
+	binary.BigEndian.PutUint32(buf[:4], term)
+	copy(buf[4:], cmd)
+	return buf
 }
 
 func keyForIndex(idx uint32) []byte {

@@ -139,7 +139,7 @@ func (rc *RaftCore) Stop() error {
 		log.Printf("%s Stopped raft gateway\n", clog.CGreenRc("Stop"))
 	}
 	if rc.grpcServer != nil {
-		rc.grpcServer.GracefulStop()
+		rc.grpcServer.Stop()
 		log.Printf("%s Stopped grpcServer\n", clog.CGreenRc("Stop"))
 	}
 	return nil

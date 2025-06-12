@@ -57,12 +57,14 @@ func newNode(storageDir string, sm curlyraft.StateMachine) *node {
 		log.Fatalf("%s Failed to initialize votedFor value into storage: %v\n", clog.CRedNode("newNode"), err)
 	}
 
+	key := keyForIndex(dummyLogEntry.logIndex)
+	val := marshalEntry(&dummyLogEntry)
+	if err := n.storage.Set(key, val); err != nil {
+		log.Fatalf("%s Failed to initialize log: %v\n", clog.CRedNode("newNode"), err)
+	}
+
 	//n.leaderCtx, n.leaderCancel = context.WithCancel(context.Background())
 	//n.leaderBecomeCtx, n.leaderBecomeCancel = context.WithCancel(context.Background())
-
-	//if err := n.storage.Set([]byte(LogPrefix), []byte("")); err != nil {
-	//	log.Fatalf("%s Failed to initialize log: %v\n", clog.CRedNode("newNode"), err)
-	//}
 
 	return n
 }
@@ -76,8 +78,8 @@ func (n *node) getCurrentTerm() (uint32, error) {
 		return u, nil
 	}
 
-	raw, closer, err := n.storage.Get([]byte("CurrentTerm"))
-	if err != nil {
+	raw, closer, found, err := n.storage.Get([]byte("CurrentTerm"))
+	if !found && err != nil {
 		log.Printf("[GetCurrentTerm] Failed to get value from storage: %v\n", err)
 		return InitialTerm, err
 	}
@@ -108,8 +110,8 @@ func (n *node) setCurrentTerm(term uint32) error {
 }
 
 func (n *node) getVotedFor() (string, error) {
-	raw, closer, err := n.storage.Get([]byte("VotedFor"))
-	if err != nil {
+	raw, closer, found, err := n.storage.Get([]byte("VotedFor"))
+	if !found && err != nil {
 		log.Printf("[GetVotedFor] Failed to get value from storage: %v\n", err)
 		return VotedForNoOne, err
 	}
@@ -150,13 +152,16 @@ func (n *node) getLog() ([]*logEntry, error) {
 
 	out := make([]*logEntry, 0)
 	for ok := iter.First(); ok; ok = iter.Next() {
+		key := iter.Key()
 		raw, err := iter.ValueAndErr()
 		if err != nil {
 			log.Printf("[GetLog] Failed to get one of value from iterator: %v\n", err)
 			return nil, err
 		}
 
-		entry, err := bytesToLogEntry(raw)
+		idxBytes := key[len(LogPrefix):]
+		logIndex := binary.BigEndian.Uint32(idxBytes)
+		entry, err := bytesToLogEntry(raw, logIndex)
 		if err != nil {
 			log.Printf("[GetLog] Failed to parse raw log entry: %v\n", err)
 			return nil, err
@@ -167,36 +172,11 @@ func (n *node) getLog() ([]*logEntry, error) {
 	return out, nil
 }
 
-func (rc *RaftCore) propose(cmd []byte) error {
-	rc.mu.Lock()
-	log.Printf("%s Start propose cmd into log storage\n", clog.CBlueRc("propose"))
-	curTerm, err := rc.node.getCurrentTerm()
-	if err != nil {
-		log.Printf("%s Failed to get current term\n", clog.CRedRc("propose"))
-		return err
-	}
-	if rc.node.lastLogTerm < curTerm {
-		log.Printf("%s Also update lastLogTerm\n", clog.CGreenRc("propose"))
-		rc.node.lastLogTerm = curTerm
-	}
-	if err := rc.node.appendEntry(&logEntry{
-		logTerm:  curTerm,
-		logIndex: rc.node.lastLogIndex + 1,
-		command:  cmd,
-	}); err != nil {
-		log.Printf("%s Failed to append entry into log\n", clog.CRedRc("propose"))
-	}
-	rc.node.lastLogIndex++
-	log.Printf("%s Done with propose. Now lastLogTerm:%d,lastLogIdx:%d\n",
-		clog.CGreenRc("propose"), rc.node.lastLogTerm, rc.node.lastLogIndex)
-	rc.mu.Unlock()
-	return nil
-}
-
 func (n *node) appendEntry(entry *logEntry) error {
 	log.Printf("%s Start append an entry:logTerm=%d,logIndex=%d\n",
 		clog.CGreenNode("appendEntry"), entry.logTerm, entry.logIndex)
-	key, val := logEntryToKeyBytes(entry, n.lastLogIndex)
+	key := keyForIndex(entry.logIndex)
+	val := marshalEntry(entry)
 	if err := n.storage.Set(key, val); err != nil {
 		log.Printf("%s Failed to store entry into database: %v\n", clog.CRedNode("appendEntry"), err)
 		return err
@@ -205,28 +185,31 @@ func (n *node) appendEntry(entry *logEntry) error {
 }
 
 func (n *node) getLogTerm(idx uint32) (uint32, bool) {
-	if idx == 0 {
-		log.Printf("%s idx is 0, return 0, true\n", clog.CGreenNode("getLogTerm"))
-		return 0, true
-	}
-	raw, closer, err := n.storage.Get(keyForIndex(idx))
-	if err != nil {
+	raw, closer, found, err := n.storage.Get(keyForIndex(idx))
+	if !found && err != nil {
 		log.Printf("%s Got error while getting key: %s : %v\n", clog.CRedNode("getLogTerm"), keyForIndex(idx), err)
 		return 0, false
 	}
 	defer func() {
+		if closer == nil {
+			return
+		}
 		if err := closer.Close(); err != nil {
 			log.Printf("[getLogTerm] Failed to close storage: %v\n", err)
 		}
 	}()
 
-	entry, err := bytesToLogEntry(raw)
-	if err != nil {
-		log.Printf("%s Got error while doing bytesToLogEntry: %v\n", clog.CRedNode("getLogTerm"), err)
+	if found {
+		entry, err := bytesToLogEntry(raw, idx)
+		if err != nil {
+			log.Printf("%s Got error while doing bytesToLogEntry: %v\n", clog.CRedNode("getLogTerm"), err)
+			return 0, false
+		}
+
+		return entry.logTerm, true
+	} else {
 		return 0, false
 	}
-
-	return entry.logTerm, true
 }
 
 func (n *node) deleteConflicts(fromIndex uint32) error {
@@ -266,14 +249,15 @@ func (n *node) applyEntries() {
 		next := n.lastApplied + 1
 		log.Printf("%s Log entry:%d is going to be applied\n", clog.CGreenNode("applyEntries"), next)
 		if next > n.commitIndex {
-			log.Printf("%s The next:%d is over current node commitIndex:%d!\n", clog.CBlueNode("applyEntries"), next, n.commitIndex)
+			log.Printf("%s The next:%d is over current node commitIndex:%d!\n",
+				clog.CBlueNode("applyEntries"), next, n.commitIndex)
 			return
 		}
 
 		// read that entry
 		log.Printf("%s Read the bytes of entry\n", clog.CGreenNode("applyEntries"))
-		raw, closer, err := n.storage.Get(keyForIndex(next))
-		if err != nil {
+		raw, closer, found, err := n.storage.Get(keyForIndex(next))
+		if !found && err != nil {
 			log.Printf("%s Get entry %d: %v\n", clog.CRedNode("applyEntries"), next, err)
 			return
 		}
@@ -285,7 +269,7 @@ func (n *node) applyEntries() {
 		}
 
 		log.Printf("%s Transform the bytes into entry struct\n", clog.CGreenNode("applyEntries"))
-		entry, err := bytesToLogEntry(data)
+		entry, err := bytesToLogEntry(data, next)
 		if err != nil {
 			log.Printf("%s Parse entry %d: %v\n", clog.CRedNode("applyEntries"), next, err)
 			return
